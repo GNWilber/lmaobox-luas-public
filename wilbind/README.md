@@ -23,7 +23,7 @@ Here's my solution that allows to bind **ANYTHING**!
 ## Known issues
 - Menu don't support scrolling. More than 7 binds will be under screen.
     - You can manually edit wilconfigs/wilbind.cfg in your TF2 directory and add or edit binds by coping other ones. Try to not brake anything...
-- After loading settings bind's **Mode** is always highlighted as "Press", but stored value is correct. Idk how to fixed it, it's Menu.lua library issue.
+- After loading settings bind's **Mode** is always highlighted as "Press", but stored value is correct. Idk how to fix it, it's Menu.lua library issue.
 ### Special thanks to
 - [LNX](https://github.com/lnx00/) - Menu library
 - AI - I used AI when making this bind menu.
