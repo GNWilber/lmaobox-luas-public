@@ -1,6 +1,7 @@
 # Wilbind
 LMAOBOX doesn't have a proper bind manager, only a few options like aimbot are bindable.
 Here's my solution that allows to bind **ANYTHING**!
+
 ![screen1](https://i.imgur.com/5kQAqP6.png)
 ## Features
 - Config saving system (Team Fortress 2/wilconfigs).
