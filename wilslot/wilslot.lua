@@ -1,1 +1,1 @@
-xxx
+entities.GetLocalPlayer():GetPropEntity( "m_hActiveWeapon" ):GetLoadoutSlot()
