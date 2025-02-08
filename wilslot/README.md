@@ -1,4 +1,4 @@
-# Wilbind
+# EDIT ME
 LMAOBOX doesn't have a proper bind manager, only a few options like aimbot are bindable.
 Here's my solution that allows to bind **ANYTHING**!
 ## Features
