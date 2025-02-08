@@ -1,6 +1,7 @@
 --[[
     Menu Library for Lmaobox
     Author: LNX (github.com/lnx00)
+    Fork Author: Wilber (github.com/gnwilber)
 ]]
 
 local MenuManager = {
