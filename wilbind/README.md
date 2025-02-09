@@ -4,7 +4,7 @@ Here's my solution that allows you to bind **ANYTHING**!
 
 ![screen1](https://i.imgur.com/5kQAqP6.png)
 ## Features
-- Config saving system (Team Fortress 2/wilconfig)
+- Config saving system (Team Fortress 2/wilconfig).
 - Different bind modes:
     - Press - Changes value once when bind is pressed.
     - Hold - Changes value and returns old one when button is relased.
