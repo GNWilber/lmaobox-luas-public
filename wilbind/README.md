@@ -19,14 +19,19 @@ Here's my solution that allows you to bind **ANYTHING**!
         - I added support for typing '(' or ')'.
         - Menu shows up with LMAOBOX's menu on INSERT - original shows up on main/pause menu.
     - Feel free to use original one, but my fork will give the best experience.
+## How to use
+- Put [wilbind.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilbind/wilbind.lua) & [Menu.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/Menu.lua) to your %LOCALAPPDATA%.
+- Refresh and load wilbind in LUA tab in LMAOBOX.
+- Add bind and select desired key & mode and type "Option Name" from LMAOBOX's menu and "Value" for it.
+    - Example: H > Toggle > aim bot > 1 - You can toggle your aimbot with 'H' key.
 ## Known issues
 - Menu don't support scrolling. More than 8 binds will out of bounds yours screen.
     - You can manually edit wilconfigs/wilbind.cfg in your TF2 directory and add or edit binds by coping other ones. Try to not brake anything...
 - After loading settings bind's "Mode" is always highlighted as "Press", but stored value is correct. Idk how to fix it, it's Menu.lua library issue. It's only cosmetic problem.
 ## PS
-Please also check [WilSlot](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilslot/README.md), my other Class / Weapon binds manager.
-When you are typing anything always open a console in the game, because some letters like 'M' can open a menu.
-Code is deeply commented so you can easily edit it, and if you find any issues report it to me [here](https://github.com/GNWilber/lmaobox-luas-public/issues).
+- Please also check [WilSlot](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilslot/README.md), my other Class / Weapon binds manager.
+- When you are typing anything always open a console in the game, because some letters like 'M' can open a menu.
+- Code is deeply commented so you can easily edit it, and if you find any issues report it to me [here](https://github.com/GNWilber/lmaobox-luas-public/issues).
 ### Special thanks to
 - [LNX](https://github.com/lnx00/) - Menu library
 - AI - I used AI when making this bind menu.

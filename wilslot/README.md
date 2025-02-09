@@ -14,7 +14,7 @@ Amalgam have this epic feature to bind something to selected weapon slot or clas
     - Feel free to use original one, but my forks will give the best experience.
 ## How to use
 - Put [wilslot.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilslot/wilslot.lua) & [Menu.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/Menu.lua) to your %LOCALAPPDATA%.
-- Refresh and load wilslot from LUA tab in LMAOBOX.
+- Refresh and load wilslot in LUA tab in LMAOBOX.
 - Add bind and select desired conditions to activate bind and type "Option Name" from LMAOBOX's menu and "Value" for it.
     - Example: Scout > 2 > aim method > silent - When you play scout and switch to pistol, your aim method will be switched to silent and returns back when conditions are not met.
 ## Known issues
