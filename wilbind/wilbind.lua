@@ -1,5 +1,5 @@
 --[[
-    Wilbind - Keybind manager for LMAOBOX
+    Wilbind - Keybinds manager for LMAOBOX
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/wilbind/README.md
     Author - Wilber (https://github.com/GNWilber)
     Version - 1.00
