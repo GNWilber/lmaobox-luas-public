@@ -28,4 +28,4 @@ Amalgam have this epic feature to bind something to selected weapon slot or clas
 - Code is deeply commented so you can easily edit it, and if you find any issues report it to me [here](https://github.com/GNWilber/lmaobox-luas-public/issues).
 ### Special thanks to
 - [LNX](https://github.com/lnx00/) - Menu library
-- AI - I used AI when making this bind menu.
+- AI - Helped me with comments and code
