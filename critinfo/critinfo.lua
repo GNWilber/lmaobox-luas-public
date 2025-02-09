@@ -1,3 +1,10 @@
+--[[
+    CritInfo - Shows you detailed info of your CritHack
+    GitHub - https://github.com/GNWilber/lmaobox-luas-public/critinfo/README.md
+    Author - Wilber (https://github.com/GNWilber)
+    Version - 1.00
+--]]
+
 local indicator = draw.CreateFont('Verdana', 16, 700, FONTFLAG_CUSTOM | FONTFLAG_OUTLINE)
 local panelX, panelY = 10, 350  -- Adjust these values for top-left offset
 
