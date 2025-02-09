@@ -2,11 +2,13 @@
     Wilslot - Weapon slot and class bind manager for LMAOBOX
     GitHub - (https://github.com/GNWilber/lmaobox-luas-public/wilslot/README.md)
     Author - Wilber (https://github.com/GNWilber)
-    Version - 1.00
+    Version - 1.01 - Added pulling library from GitHub
     Required library - Menu.lib (https://github.com/GNWilber/lmaobox-luas-public/Menu.lua)
 --]]
 
-local MenuLib = require("Menu")
+-- Library loading - First one uses github and needs internet connection / second one needs to download library to your %LOCALAPPDATA%
+local MenuLib = load(http.Get("https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/refs/heads/main/Menu.lua"))()
+-- local MenuLib = require("Menu") -- Uncomment me to play offline and comment line above
 
 -- Version check for required Menu library
 assert(MenuLib.Version >= 1.35, "Wilslot: MenuLib version is too old! Current version: " .. MenuLib.Version)

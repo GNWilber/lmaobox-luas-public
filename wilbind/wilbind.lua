@@ -2,14 +2,15 @@
     Wilbind - Keybinds manager for LMAOBOX
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/wilbind/README.md
     Author - Wilber (https://github.com/GNWilber)
-    Version - 1.00
+    Version - 1.01 - Added pulling library from GitHub
     Required library - Menu.lib (https://github.com/GNWilber/lmaobox-luas-public/Menu.lua)
 --]]
 
+-- local MenuLib = load(http.Get("https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/refs/heads/main/Menu.lua"))()
 local MenuLib = require("Menu")
 
 -- Version check for required Menu library
-assert(MenuLib.Version >= 1.35, "Wilbind: MenuLib version is too old! Current version: " .. MenuLib.Version)
+assert(MenuLib.Version >= 1.52, "Wilbind: MenuLib version is too old! Current version: " .. MenuLib.Version)
 
 -- Configuration constants (folder and file path for saving settings)
 local configFolder = "wilconfigs"
