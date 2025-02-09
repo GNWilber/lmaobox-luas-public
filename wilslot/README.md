@@ -23,7 +23,7 @@ Amalgam have this epic feature to bind something to selected weapon slot or clas
 - After loading settings "Class" or "Weapon Slot" from drop list is always highlighted as "Any", but stored value is correct. Idk how to fix it, it's Menu.lua library issue.
 - Name of binds next to checkboxes only update when you are connected to server.
 ## PS
-- Please also check [WilBind](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilslot/README.md), my other keybinds manager.
+- Please also check [WilBind](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilbind/README.md), my other keybinds manager.
 - When you are typing anything always open a console in the game, because some letters like 'M' can open a menu.
 - Code is deeply commented so you can easily edit it, and if you find any issues report it to me [here](https://github.com/GNWilber/lmaobox-luas-public/issues).
 ### Special thanks to
