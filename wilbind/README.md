@@ -24,7 +24,7 @@ Here's my solution that allows you to bind **ANYTHING**!
     - You can manually edit wilconfigs/wilbind.cfg in your TF2 directory and add or edit binds by coping other ones. Try to not brake anything...
 - After loading settings bind's "Mode" is always highlighted as "Press", but stored value is correct. Idk how to fix it, it's Menu.lua library issue. It's only cosmetic problem.
 ## PS
-Please also check [WilSlot](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilbind/README.md), my other Class / Weapon binds manager.
+Please also check [WilSlot](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilslot/README.md), my other Class / Weapon binds manager.
 When you are typing anything always open a console in the game, because some letters like 'M' can open a menu.
 Code is deeply commented so you can easily edit it, and if you find any issues report it to me [here](https://github.com/GNWilber/lmaobox-luas-public/issues).
 ### Special thanks to
