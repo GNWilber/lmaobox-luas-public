@@ -331,14 +331,17 @@ local function OnDraw()
             if currentKeyState and not bind.prevKeyState then
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
                 gui.SetValue(optionName, finalValue)
+                client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
             end
         elseif modeIndex == 2 then  -- Hold mode: Set value while key is held; restore when released
             if currentKeyState and not bind.prevKeyState then
                 bind.holdOriginalValue = gui.GetValue(optionName)
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
                 gui.SetValue(optionName, finalValue)
+                client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
             elseif not currentKeyState and bind.prevKeyState and bind.holdOriginalValue then
                 gui.SetValue(optionName, bind.holdOriginalValue)
+                client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
                 bind.holdOriginalValue = nil
             end
         elseif modeIndex == 3 then  -- Toggle mode: Switch between two states on key press
@@ -348,8 +351,10 @@ local function OnDraw()
                     bind.toggleOriginalValue = gui.GetValue(optionName)
                     local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
                     gui.SetValue(optionName, finalValue)
+                    client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
                 else
                     gui.SetValue(optionName, bind.toggleOriginalValue)
+                    client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
                     bind.toggleOriginalValue = nil
                 end
             end
@@ -368,9 +373,11 @@ local function OnUnload()
         local optionName = bind.optionNameBox:GetValue()
         if bind.holdOriginalValue then
             gui.SetValue(optionName, bind.holdOriginalValue)
+            client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
         end
         if bind.toggleOriginalValue then
             gui.SetValue(optionName, bind.toggleOriginalValue)
+            client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
         end
     end
     MenuLib.RemoveMenu(menu)
