@@ -338,10 +338,8 @@ local function OnDraw()
                 bind.holdOriginalValue = gui.GetValue(optionName)
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
                 gui.SetValue(optionName, finalValue)
-                client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
             elseif not currentKeyState and bind.prevKeyState and bind.holdOriginalValue then
-                gui.SetValue(optionName, bind.holdOriginalValue)
-                client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
+                gui.SetValue(optionName, bind.holdOriginalValue)               
                 bind.holdOriginalValue = nil
             end
         elseif modeIndex == 3 then  -- Toggle mode: Switch between two states on key press
@@ -350,11 +348,9 @@ local function OnDraw()
                 if bind.toggleState then
                     bind.toggleOriginalValue = gui.GetValue(optionName)
                     local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
-                    gui.SetValue(optionName, finalValue)
-                    client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
+                    gui.SetValue(optionName, finalValue)                   
                 else
-                    gui.SetValue(optionName, bind.toggleOriginalValue)
-                    client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
+                    gui.SetValue(optionName, bind.toggleOriginalValue)                   
                     bind.toggleOriginalValue = nil
                 end
             end
