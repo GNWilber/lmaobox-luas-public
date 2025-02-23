@@ -327,13 +327,13 @@ local function OnDraw()
         if optionName == "" then goto continue end
 
         -- Process bind according to its mode:
-        if modeIndex == 1 then  -- Press mode: Trigger on key press (transition from off to on)
+        if modeIndex == 1 and not engine.IsChatOpen() then  -- Press mode: Trigger on key press (transition from off to on)
             if currentKeyState and not bind.prevKeyState then
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
                 gui.SetValue(optionName, finalValue)
                 client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
             end
-        elseif modeIndex == 2 then  -- Hold mode: Set value while key is held; restore when released
+        elseif modeIndex == 2 and not engine.IsChatOpen() then  -- Hold mode: Set value while key is held; restore when released
             if currentKeyState and not bind.prevKeyState then
                 bind.holdOriginalValue = gui.GetValue(optionName)
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
@@ -342,7 +342,7 @@ local function OnDraw()
                 gui.SetValue(optionName, bind.holdOriginalValue)               
                 bind.holdOriginalValue = nil
             end
-        elseif modeIndex == 3 then  -- Toggle mode: Switch between two states on key press
+        elseif modeIndex == 3 and not engine.IsChatOpen() then  -- Toggle mode: Switch between two states on key press
             if currentKeyState and not bind.prevKeyState then
                 bind.toggleState = not bind.toggleState
                 if bind.toggleState then
