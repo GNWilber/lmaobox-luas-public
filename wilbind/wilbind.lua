@@ -333,7 +333,7 @@ local function OnDraw()
                 gui.SetValue(optionName, finalValue)
                 client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
             end
-        elseif modeIndex == 2 and not engine.IsChatOpen() then  -- Hold mode: Set value while key is held; restore when released
+        elseif modeIndex == 2 then  -- Hold mode: Set value while key is held; restore when released
             if currentKeyState and not bind.prevKeyState then
                 bind.holdOriginalValue = gui.GetValue(optionName)
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
