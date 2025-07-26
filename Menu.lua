@@ -415,6 +415,18 @@ function Textbox:Render(menu)
                         self.Value = self.Value .. "("
                     elseif self._LastKey == "0" then
                         self.Value = self.Value .. ")"
+                    elseif self._LastKey == "7" then
+                        self.Value = self.Value .. "&"
+                    else
+                        self.Value = self.Value .. string.upper(self._LastKey)
+                    end
+                elseif input.IsButtonDown(KEY_RSHIFT) then
+                    if self._LastKey == "9" then
+                        self.Value = self.Value .. "("
+                    elseif self._LastKey == "0" then
+                        self.Value = self.Value .. ")"
+                    elseif self._LastKey == "7" then
+                        self.Value = self.Value .. "&"
                     else
                         self.Value = self.Value .. string.upper(self._LastKey)
                     end

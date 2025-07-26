@@ -2,7 +2,7 @@
     Wilbind - Keybinds manager for LMAOBOX
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/wilbind/README.md
     Author - Wilber (https://github.com/GNWilber)
-    Version - 1.01 - Added pulling library from GitHub
+    Version - 1.2 - Added && option
     Required library - Menu.lib (https://github.com/GNWilber/lmaobox-luas-public/Menu.lua)
 --]]
 
@@ -56,6 +56,17 @@ local function ParseIncrement(value)
         }
     end
     return nil
+end
+
+-- Split a string by '&&' and trim whitespace
+local function SplitOptionNames(str)
+    local names = {}
+    for chunk in string.gmatch(str, "([^&]+)") do
+        -- trim leading/trailing whitespace
+        local name = chunk:gsub("^%s+", ""):gsub("%s+$", "")
+        if name ~= "" then table.insert(names, name) end
+    end
+    return names
 end
 
 -- Converts the given value (string or number) for a bind.
@@ -320,37 +331,60 @@ local function OnDraw()
         local currentKey = bind.keybind:GetValue()
         local currentKeyState = input.IsButtonDown(currentKey)
         local modeIndex = bind.modeCombo:GetSelectedIndex()
-        local optionName = bind.optionNameBox:GetValue()
+        -- support multiple option names
+        local rawNames    = bind.optionNameBox:GetValue()
+        local optionNames = SplitOptionNames(rawNames)
         local optionValue = ConvertValue(bind, bind.optionValueBox:GetValue())
 
         -- Skip if no option name is provided.
-        if optionName == "" then goto continue end
+        if #optionNames == 0 then goto continue end
 
         -- Process bind according to its mode:
+        local rawNames    = bind.optionNameBox:GetValue()
+        local optionNames = SplitOptionNames(rawNames)
+
         if modeIndex == 1 and not engine.IsChatOpen() then  -- Press mode: Trigger on key press (transition from off to on)
             if currentKeyState and not bind.prevKeyState then
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
-                gui.SetValue(optionName, finalValue)
-                client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
+                for _, optionName in ipairs(optionNames) do
+                    gui.SetValue(optionName, finalValue)
+                    client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
+                end
             end
+
         elseif modeIndex == 2 then  -- Hold mode: Set value while key is held; restore when released
             if currentKeyState and not bind.prevKeyState then
-                bind.holdOriginalValue = gui.GetValue(optionName)
+                bind.holdOriginalValue = {}
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
-                gui.SetValue(optionName, finalValue)
+                for _, optionName in ipairs(optionNames) do
+                    bind.holdOriginalValue[optionName] = gui.GetValue(optionName)
+                    gui.SetValue(optionName, finalValue)
+                end
             elseif not currentKeyState and bind.prevKeyState and bind.holdOriginalValue then
-                gui.SetValue(optionName, bind.holdOriginalValue)               
+                for _, optionName in ipairs(optionNames) do
+                    if bind.holdOriginalValue[optionName] then
+                        gui.SetValue(optionName, bind.holdOriginalValue[optionName])
+                    end
+                end
                 bind.holdOriginalValue = nil
             end
+
         elseif modeIndex == 3 and not engine.IsChatOpen() then  -- Toggle mode: Switch between two states on key press
             if currentKeyState and not bind.prevKeyState then
                 bind.toggleState = not bind.toggleState
                 if bind.toggleState then
-                    bind.toggleOriginalValue = gui.GetValue(optionName)
+                    bind.toggleOriginalValue = {}
                     local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
-                    gui.SetValue(optionName, finalValue)                   
+                    for _, optionName in ipairs(optionNames) do
+                        bind.toggleOriginalValue[optionName] = gui.GetValue(optionName)
+                        gui.SetValue(optionName, finalValue)
+                    end
                 else
-                    gui.SetValue(optionName, bind.toggleOriginalValue)                   
+                    for _, optionName in ipairs(optionNames) do
+                        if bind.toggleOriginalValue[optionName] then
+                            gui.SetValue(optionName, bind.toggleOriginalValue[optionName])
+                        end
+                    end
                     bind.toggleOriginalValue = nil
                 end
             end
