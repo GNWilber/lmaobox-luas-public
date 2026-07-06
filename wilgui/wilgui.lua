@@ -2,16 +2,16 @@
     wilgui - Generic Framework for Lmaobox
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilgui
     Author - Wilber (Forked from LNX)
-    Version - 1.04
+    Version - 1.05
 ]]
 
-local Version = 1.04
+local Version = 1.05
 local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilgui/wilgui.lua"
 
 -- =======================
--- Auto Update Logic
+-- Auto Update Logic (Safe)
 -- =======================
-local function AutoUpdate()
+pcall(function()
     local content = http.Get(RepoURL)
     if not content or content == "" then return end
     local remoteVerStr = string.match(content, "Version%s*-%s*([%d%.]+)")
@@ -24,11 +24,10 @@ local function AutoUpdate()
         if f then
             f:write(content)
             f:close()
-            print("[wilgui] Successfully updated! Please reload your lua script.")
+            print("[wilgui] Successfully updated! Please reload your lua scripts.")
         end
     end
-end
-AutoUpdate()
+end)
 
 local wilgui = {
     CurrentID = 1,
