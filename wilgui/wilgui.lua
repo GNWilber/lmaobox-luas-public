@@ -2,39 +2,29 @@
     wilgui - Generic Framework for Lmaobox
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilgui
     Author - Wilber (Forked from LNX)
-    Version - 1.06
+    Version - 1.07
 ]]
 
-local Version = 1.06
+local Version = 1.07
 local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilgui/wilgui.lua"
 
--- =======================
--- Auto Update Logic (Safe)
--- =======================
 pcall(function()
     local content = http.Get(RepoURL)
     if not content or content == "" then return end
     local remoteVerStr = string.match(content, "Version%s*-%s*([%d%.]+)")
     if not remoteVerStr then return end
-    
     local remoteVer = tonumber(remoteVerStr)
     if remoteVer and remoteVer > Version then
         print("[wilgui] Found newer version (" .. remoteVer .. "). Updating...")
         local f = io.open("wilgui.lua", "w")
-        if f then
-            f:write(content)
-            f:close()
-            print("[wilgui] Successfully updated! Please reload your lua scripts.")
-        end
+        if f then f:write(content); f:close(); print("[wilgui] Successfully updated! Please reload your lua scripts.") end
     end
 end)
 
 local wilgui = {
-    CurrentID = 1,
-    Menus = {},
+    CurrentID = 1, Menus = {},
     Font = draw.CreateFont("Verdana", 14, 510),
-    Version = Version,
-    DebugInfo = false
+    Version = Version, DebugInfo = false
 }
 
 wilgui.MenuFlags = {
@@ -42,23 +32,16 @@ wilgui.MenuFlags = {
     AutoSize = 1 << 3, ShowAlways = 1 << 4, Popup = 1 << 5
 }
 
-wilgui.ItemFlags = {
-    None = 0, FullWidth = 1 << 0, Active = 1 << 1
-}
+wilgui.ItemFlags = { None = 0, FullWidth = 1 << 0, Active = 1 << 1 }
 
-local MouseReleased = false
-local DragID = 0
-local DragOffset = { 0, 0 }
-local PopupOpen = false
+local MouseReleased, DragID, DragOffset, PopupOpen = false, 0, {0, 0}, false
 
 local InputMap = {}
 for i = 0, 9 do InputMap[i + 1] = tostring(i) end
 for i = 65, 90 do InputMap[i - 54] = string.char(i) end
 
 local function GetCurrentKey()
-    for i = 0, 106 do
-        if input.IsButtonDown(i) then return i end
-    end
+    for i = 0, 106 do if input.IsButtonDown(i) then return i end end
     return nil
 end
 
@@ -72,16 +55,11 @@ local function GetKeyName(key, specialKeys)
     elseif key == KEY_MINUS then return "-" end
     if specialKeys == false then return nil end
 
-    if key == KEY_LCONTROL then return "LCTRL"
-    elseif key == KEY_RCONTROL then return "RCTRL"
-    elseif key == KEY_LALT then return "LALT"
-    elseif key == KEY_RALT then return "RALT"
-    elseif key == KEY_LSHIFT then return "LSHIFT"
-    elseif key == KEY_RSHIFT then return "RSHIFT"
-    elseif key == KEY_ENTER then return "ENTER"
-    elseif key == KEY_UP then return "UP"
-    elseif key == KEY_LEFT then return "LEFT"
-    elseif key == KEY_DOWN then return "DOWN"
+    if key == KEY_LCONTROL then return "LCTRL" elseif key == KEY_RCONTROL then return "RCTRL"
+    elseif key == KEY_LALT then return "LALT" elseif key == KEY_RALT then return "RALT"
+    elseif key == KEY_LSHIFT then return "LSHIFT" elseif key == KEY_RSHIFT then return "RSHIFT"
+    elseif key == KEY_ENTER then return "ENTER" elseif key == KEY_UP then return "UP"
+    elseif key == KEY_LEFT then return "LEFT" elseif key == KEY_DOWN then return "DOWN"
     elseif key == KEY_RIGHT then return "RIGHT"
     elseif key >= 37 and key <= 46 then return "KP" .. (key - 37)
     elseif key >= 92 and key <= 103 then return "F" .. (key - 91) end
@@ -103,11 +81,22 @@ end
 local function Clamp(n, low, high) return math.min(math.max(n, low), high) end
 local function SetColorStyle(color) draw.Color(color[1], color[2], color[3], color[4] or 255) end
 
---[[ Component Class ]]
+--[[ Component Base Class ]]
 local Component = { ID = 0, Visible = true, Flags = wilgui.ItemFlags.None }
 Component.__index = Component
 function Component.New() return setmetatable({ Visible = true, Flags = wilgui.ItemFlags.None }, Component) end
 function Component:SetVisible(state) self.Visible = state end
+
+--[[ ColumnBreak (NEW) ]]
+local ColumnBreak = { IsColumnBreak = true }
+ColumnBreak.__index = ColumnBreak
+setmetatable(ColumnBreak, Component)
+function ColumnBreak.New()
+    local self = setmetatable({}, ColumnBreak)
+    self.ID = wilgui.CurrentID; wilgui.CurrentID = wilgui.CurrentID + 1; self.IsColumnBreak = true
+    return self
+end
+function wilgui.ColumnBreak() return ColumnBreak.New() end
 
 --[[ Label ]]
 local Label = { Text = "Label" }
@@ -159,7 +148,7 @@ function Button.New(label, callback, flags)
 end
 function Button:Render(menu)
     local lblWidth, lblHeight = draw.GetTextSize(self.Label)
-    local btnWidth = (self.Flags & wilgui.ItemFlags.FullWidth ~= 0) and (menu.Width - menu.Style.Space * 2) or (lblWidth + menu.Style.Space * 4)
+    local btnWidth = (self.Flags & wilgui.ItemFlags.FullWidth ~= 0) and (menu.ColumnWidth - menu.Style.Space * 2) or (lblWidth + menu.Style.Space * 4)
     local btnHeight = lblHeight + (menu.Style.Space * 2)
     
     if self.Flags & wilgui.ItemFlags.Active == 0 then SetColorStyle(menu.Style.Item) else SetColorStyle(menu.Style.ItemActive) end
@@ -185,7 +174,7 @@ end
 function Slider:GetValue() return self.Value end
 function Slider:Render(menu)
     local lblWidth, lblHeight = draw.GetTextSize(self.Label .. ": " .. self.Value)
-    local sliderWidth = menu.Width - (menu.Style.Space * 2)
+    local sliderWidth = menu.ColumnWidth - (menu.Style.Space * 2)
     local sliderHeight = lblHeight + (menu.Style.Space * 2)
     local dragX = math.floor(((self.Value - self.Min) / math.abs(self.Max - self.Min)) * sliderWidth)
 
@@ -218,7 +207,7 @@ end
 function Textbox:GetValue() return self.Value end
 function Textbox:Render(menu)
     local lblWidth, lblHeight = draw.GetTextSize(self.Value)
-    local boxWidth = menu.Width - (menu.Style.Space * 2)
+    local boxWidth = menu.ColumnWidth - (menu.Style.Space * 2)
     local boxHeight = 20
 
     SetColorStyle(menu.Style.Item)
@@ -278,7 +267,7 @@ function Keybind:Render(menu)
     end
 
     local lblWidth, lblHeight = draw.GetTextSize(btnLabel)
-    local btnWidth = (self.Flags & wilgui.ItemFlags.FullWidth ~= 0) and (menu.Width - menu.Style.Space * 2) or (lblWidth + menu.Style.Space * 4)
+    local btnWidth = (self.Flags & wilgui.ItemFlags.FullWidth ~= 0) and (menu.ColumnWidth - menu.Style.Space * 2) or (lblWidth + menu.Style.Space * 4)
     local btnHeight = lblHeight + (menu.Style.Space * 2)
 
     if self.Flags & wilgui.ItemFlags.Active == 0 then SetColorStyle(menu.Style.Item) else SetColorStyle(menu.Style.ItemActive) end
@@ -323,7 +312,7 @@ function Combobox:IsOpen() return self._Child.Visible end
 function Combobox:SetOpen(state) if state == false and not self:IsOpen() then return end; self._Child:SetVisible(state); PopupOpen = state end
 function Combobox:Render(menu)
     local lblWidth, lblHeight = draw.GetTextSize(self.Label)
-    local cmbWidth = (self.Flags & wilgui.ItemFlags.FullWidth ~= 0) and (menu.Width - menu.Style.Space * 2) or (lblWidth + menu.Style.Space * 4)
+    local cmbWidth = (self.Flags & wilgui.ItemFlags.FullWidth ~= 0) and (menu.ColumnWidth - menu.Style.Space * 2) or (lblWidth + menu.Style.Space * 4)
     local cmbHeight = lblHeight + (menu.Style.Space * 2)
 
     SetColorStyle(menu.Style.Item)
@@ -350,7 +339,7 @@ local MetaMenu = { __index = Menu }
 function Menu.New(title, flags)
     local self = setmetatable({}, MetaMenu)
     self.ID = wilgui.CurrentID; self.Title = title; self.Components = {}; self.Visible = true
-    self.X = 100; self.Y = 100; self.Width = 220; self.Height = 200; self.Cursor = { X = 0, Y = 0 }
+    self.X = 100; self.Y = 100; self.Width = 220; self.ColumnWidth = 220; self.Height = 200; self.Cursor = { X = 0, Y = 0 }
     self.Style = {
         Space = 4, Outline = true, WindowBg = { 30, 30, 30, 255 }, TitleBg = { 55, 100, 215, 255 },
         Text = { 255, 255, 255, 255 }, Item = { 50, 50, 50, 255 }, ItemHover = { 65, 65, 65, 255 },
@@ -381,9 +370,7 @@ end
 function wilgui.Clear() wilgui.Menus = {}; PopupOpen = false end 
 function wilgui.RemoveMenu(menu)
     for i, vMenu in ipairs(wilgui.Menus) do
-        if vMenu.ID == menu.ID then
-            vMenu:Remove(); table.remove(wilgui.Menus, i); DragID = 0; return
-        end
+        if vMenu.ID == menu.ID then vMenu:Remove(); table.remove(wilgui.Menus, i); DragID = 0; return end
     end
 end
 function wilgui.Create(title, flags)
@@ -414,6 +401,17 @@ function wilgui.Draw()
         if gui.IsMenuOpen() == false and (vMenu.Flags & wilgui.MenuFlags.ShowAlways == 0) then return end
 
         local tbHeight = 20
+        
+        -- Screen Boundaries Pre-Calculation
+        local columns = 1
+        for _, vComp in pairs(vMenu.Components) do
+            if vComp.Visible and vComp.IsColumnBreak then columns = columns + 1 end
+        end
+        if vMenu.Flags & wilgui.MenuFlags.AutoSize ~= 0 then
+            vMenu.Width = (vMenu.ColumnWidth * columns) + (vMenu.Style.Space * (columns + 1))
+        end
+
+        -- Clamping and Dragging
         if vMenu.Flags & wilgui.MenuFlags.NoDrag == 0 then
             local mX, mY = input.GetMousePos()[1], input.GetMousePos()[2]
             if DragID == vMenu.ID then
@@ -423,6 +421,12 @@ function wilgui.Draw()
                     DragOffset = { mX - vMenu.X, mY - vMenu.Y }; DragID = vMenu.ID
                 end
             end
+        end
+
+        local screenW, screenH = draw.GetScreenSize()
+        if screenW and screenH then
+            vMenu.X = math.max(0, math.min(vMenu.X, screenW - vMenu.Width))
+            vMenu.Y = math.max(0, math.min(vMenu.Y, screenH - tbHeight))
         end
 
         if vMenu.Flags & wilgui.MenuFlags.NoBackground == 0 then
@@ -442,11 +446,22 @@ function wilgui.Draw()
 
         vMenu.Cursor.Y = vMenu.Cursor.Y + vMenu.Style.Space
         vMenu.Cursor.X = vMenu.Style.Space
+        local startY = vMenu.Cursor.Y
+        local maxCursorY = startY
+
         for _, vComp in pairs(vMenu.Components) do
-            if vComp.Visible and (vMenu.Flags & wilgui.MenuFlags.AutoSize ~= 0 or vMenu.Cursor.Y < vMenu.Height) then vComp:Render(vMenu) end
+            if vComp.Visible then 
+                if vComp.IsColumnBreak then
+                    vMenu.Cursor.Y = startY
+                    vMenu.Cursor.X = vMenu.Cursor.X + vMenu.ColumnWidth + vMenu.Style.Space
+                else
+                    vComp:Render(vMenu)
+                    if vMenu.Cursor.Y > maxCursorY then maxCursorY = vMenu.Cursor.Y end
+                end
+            end
         end
 
-        if vMenu.Flags & wilgui.MenuFlags.AutoSize ~= 0 then vMenu.Height = vMenu.Cursor.Y end
+        if vMenu.Flags & wilgui.MenuFlags.AutoSize ~= 0 then vMenu.Height = maxCursorY end
         vMenu.Cursor = { X = 0, Y = 0 }
         ::continue::
     end
