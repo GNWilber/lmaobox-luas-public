@@ -2,10 +2,10 @@
     wilgui - Generic Framework for Lmaobox
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilgui
     Author - Wilber (Forked from LNX)
-    Version - 1.01
+    Version - 1.02
 ]]
 
-local Version = 1.01
+local Version = 1.02
 local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilgui/wilgui.lua"
 
 -- =======================

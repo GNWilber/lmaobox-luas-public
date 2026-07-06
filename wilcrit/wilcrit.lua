@@ -2,10 +2,10 @@
     wilcrit - Shows you detailed info of your CritHack
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilcrit
     Author - Wilber (https://github.com/GNWilber)
-    Version - 1.04
+    Version - 1.05
 --]]
 
-local Version = 1.04
+local Version = 1.05
 local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilcrit/wilcrit.lua"
 
 -- =======================
@@ -34,9 +34,12 @@ AutoUpdate()
 -- =======================
 -- wilgui & Config Loader
 -- =======================
+-- VERY IMPORTANT: Flush the Lua memory cache so Lmaobox doesn't load old code!
+package.loaded["wilgui"] = nil 
+
 local success, wilgui = pcall(require, "wilgui")
 if not success then
-    print("[wilcrit WARNING] wilgui.lua missing! Cannot draw the config menu. Ensure it's in the same folder.")
+    print("[wilcrit WARNING] wilgui.lua missing or corrupted! Cannot draw the config menu. Ensure it's correctly placed in the same folder.")
 end
 
 local ConfigFile = "wilconfigs/wilcrit.cfg"
@@ -68,7 +71,7 @@ local chkEnable, sldX, sldY = nil, nil, nil
 if success and wilgui then
     wilgui.Clear() -- Clears existing menus on script reload
     
-    -- Notice we now use wilgui.MenuFlags to securely get the flag
+    -- Creating Menu safely using the built-in library flag
     local menu = wilgui.Create("wilcrit Settings", wilgui.MenuFlags.AutoSize)
     menu.X = 100
     menu.Y = 100
