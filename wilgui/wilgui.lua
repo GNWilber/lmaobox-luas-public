@@ -2,10 +2,10 @@
     wilgui - Generic Framework for Lmaobox
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilgui
     Author - Wilber (Forked from LNX)
-    Version - 1.00
+    Version - 1.01
 ]]
 
-local Version = 1.00
+local Version = 1.01
 local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilgui/wilgui.lua"
 
 -- =======================
@@ -38,7 +38,8 @@ local wilgui = {
     DebugInfo = false
 }
 
-MenuFlags = {
+-- Embedded Flags to prevent nil index errors across files
+wilgui.MenuFlags = {
     None = 0,
     NoTitle = 1 << 0,
     NoBackground = 1 << 1,
@@ -48,7 +49,7 @@ MenuFlags = {
     Popup = 1 << 5
 }
 
-ItemFlags = {
+wilgui.ItemFlags = {
     None = 0,
     FullWidth = 1 << 0,
     Active = 1 << 1
@@ -79,9 +80,9 @@ local function SetColorStyle(color)
 end
 
 --[[ Component Class ]]
-local Component = { ID = 0, Visible = true, Flags = ItemFlags.None }
+local Component = { ID = 0, Visible = true, Flags = wilgui.ItemFlags.None }
 Component.__index = Component
-function Component.New() return setmetatable({ Visible = true, Flags = ItemFlags.None }, Component) end
+function Component.New() return setmetatable({ Visible = true, Flags = wilgui.ItemFlags.None }, Component) end
 function Component:SetVisible(state) self.Visible = state end
 
 --[[ Checkbox ]]
@@ -90,7 +91,7 @@ Checkbox.__index = Checkbox
 setmetatable(Checkbox, Component)
 function Checkbox.New(label, value, flags)
     local self = setmetatable({}, Checkbox)
-    self.ID = wilgui.CurrentID; self.Label = label; self.Value = value or false; self.Flags = flags or ItemFlags.None
+    self.ID = wilgui.CurrentID; self.Label = label; self.Value = value or false; self.Flags = flags or wilgui.ItemFlags.None
     wilgui.CurrentID = wilgui.CurrentID + 1
     return self
 end
@@ -115,7 +116,7 @@ Slider.__index = Slider
 setmetatable(Slider, Component)
 function Slider.New(label, min, max, value, flags)
     local self = setmetatable({}, Slider)
-    self.ID = wilgui.CurrentID; self.Label = label; self.Min = min; self.Max = max; self.Value = value or min; self.Flags = flags or ItemFlags.None
+    self.ID = wilgui.CurrentID; self.Label = label; self.Min = min; self.Max = max; self.Value = value or min; self.Flags = flags or wilgui.ItemFlags.None
     wilgui.CurrentID = wilgui.CurrentID + 1
     return self
 end
@@ -163,7 +164,7 @@ end
 function Menu:AddComponent(component) table.insert(self.Components, component); return component end
 
 --[[ wilgui Core ]]
-function wilgui.Clear() wilgui.Menus = {} end -- Clears menus to prevent overlaps on script reload
+function wilgui.Clear() wilgui.Menus = {} end 
 function wilgui.Create(title, flags)
     local menu = Menu.New(title, flags)
     table.insert(wilgui.Menus, menu)
@@ -178,10 +179,10 @@ function wilgui.Draw()
 
     for _, vMenu in pairs(wilgui.Menus) do
         if not vMenu.Visible then goto continue end
-        if gui.IsMenuOpen() == false and (vMenu.Flags & MenuFlags.ShowAlways == 0) then return end
+        if gui.IsMenuOpen() == false and (vMenu.Flags & wilgui.MenuFlags.ShowAlways == 0) then return end
 
         local tbHeight = 20
-        if vMenu.Flags & MenuFlags.NoDrag == 0 then
+        if vMenu.Flags & wilgui.MenuFlags.NoDrag == 0 then
             local mX, mY = input.GetMousePos()[1], input.GetMousePos()[2]
             if DragID == vMenu.ID then
                 if input.IsButtonDown(MOUSE_LEFT or 107) then
@@ -215,7 +216,7 @@ function wilgui.Draw()
             if vComp.Visible then vComp:Render(vMenu) end
         end
 
-        if vMenu.Flags & MenuFlags.AutoSize ~= 0 then vMenu.Height = vMenu.Cursor.Y end
+        if vMenu.Flags & wilgui.MenuFlags.AutoSize ~= 0 then vMenu.Height = vMenu.Cursor.Y end
         ::continue::
     end
 end

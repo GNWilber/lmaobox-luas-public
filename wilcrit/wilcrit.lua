@@ -2,10 +2,10 @@
     wilcrit - Shows you detailed info of your CritHack
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilcrit
     Author - Wilber (https://github.com/GNWilber)
-    Version - 1.03
+    Version - 1.04
 --]]
 
-local Version = 1.03
+local Version = 1.04
 local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilcrit/wilcrit.lua"
 
 -- =======================
@@ -66,9 +66,10 @@ local savedEn, savedX, savedY = LoadConfig()
 
 local chkEnable, sldX, sldY = nil, nil, nil
 if success and wilgui then
-    wilgui.Clear() -- Clears existing menus on script reload to prevent duplication!
+    wilgui.Clear() -- Clears existing menus on script reload
     
-    local menu = wilgui.Create("wilcrit Settings", MenuFlags.AutoSize)
+    -- Notice we now use wilgui.MenuFlags to securely get the flag
+    local menu = wilgui.Create("wilcrit Settings", wilgui.MenuFlags.AutoSize)
     menu.X = 100
     menu.Y = 100
     
