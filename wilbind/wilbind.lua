@@ -1,83 +1,99 @@
 --[[
     Wilbind - Keybinds manager for LMAOBOX
-    GitHub - https://github.com/GNWilber/lmaobox-luas-public/wilbind/README.md
+    GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilbind
     Author - Wilber (https://github.com/GNWilber)
-    Version - 1.2 - Added && option
-    Required library - Menu.lib (https://github.com/GNWilber/lmaobox-luas-public/Menu.lua)
+    Version - 1.30
 --]]
 
--- local MenuLib = load(http.Get("https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/refs/heads/main/Menu.lua"))()
-local MenuLib = require("Menu")
+local Version = 1.30
+local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilbind/wilbind.lua"
 
--- Version check for required Menu library
-assert(MenuLib.Version >= 1.52, "Wilbind: MenuLib version is too old! Current version: " .. MenuLib.Version)
+-- =======================
+-- Auto Update Logic
+-- =======================
+local function AutoUpdate()
+    local content = http.Get(RepoURL)
+    if not content or content == "" then return end
+    local remoteVerStr = string.match(content, "Version%s*-%s*([%d%.]+)")
+    if not remoteVerStr then return end
+    
+    local remoteVer = tonumber(remoteVerStr)
+    if remoteVer and remoteVer > Version then
+        print("[Wilbind] Found newer version (" .. remoteVer .. "). Updating...")
+        local f = io.open("wilbind.lua", "w")
+        if f then
+            f:write(content)
+            f:close()
+            print("[Wilbind] Successfully updated! Please reload your lua script.")
+        end
+    end
+end
+AutoUpdate()
 
--- Configuration constants (folder and file path for saving settings)
+-- =======================
+-- Load wilgui framework
+-- =======================
+package.loaded["wilgui"] = nil 
+local success, wilgui = pcall(require, "wilgui")
+
+if not success then
+    print("[Wilbind ERROR] wilgui.lua is missing or corrupted! Please place it in your lua folder.")
+    return
+end
+
+-- Configuration constants
 local configFolder = "wilconfigs"
 local configPath = configFolder .. "/wilbind.cfg"
 
 -- Create the main menu for the bind manager
-local menu = MenuLib.Create("Wilbind", MenuFlags.AutoSize)
+wilgui.Clear() -- Flush old menus so reloads don't stack
+local menu = wilgui.Create("Wilbind", wilgui.MenuFlags.AutoSize)
 print("Wilbind: Menu initialized")
 
 -- Cosmetic customization for the menu window
-menu:SetPosition(400, 0)
+menu:SetPosition(400, 100)
 menu.Style.Space    = 1
 menu.Style.WindowBg = { 30, 30, 30, 240 }
 menu.Style.TitleBg  = { 0, 106, 255, 240 }
 menu.Style.Item     = { 60, 60, 60, 240 }
--- menu.Style.Font = draw.CreateFont("Verdana", 14, 510) -- Uncomment and adjust if you want to change the font
 
 -- State management variables
-local binds = {}         -- Table holding all bind configurations
-local uuidCounter = 0    -- Counter for generating unique IDs
-local globalEnableCheckbox, disableInMenuCheckbox  -- Global control checkboxes
+local binds = {}         
+local uuidCounter = 0    
+local globalEnableCheckbox, disableInMenuCheckbox  
 
 --------------------------------------------------------------------------------
 -- Helper Functions
 --------------------------------------------------------------------------------
 
--- Generates a unique ID for each bind based on the current time and an incrementing counter.
 local function GenerateUUID()
     uuidCounter = uuidCounter + 1
     return string.format("%X-%X", os.time(), uuidCounter)
 end
 
--- Parses a string command for incrementing values.
--- Example input: "increment 1 10 1" returns a table with start=1, finish=10, step=1.
 local function ParseIncrement(value)
     if type(value) ~= "string" then return nil end
     local start, finish, step = value:match("^increment%s+(%d+)%s+(%d+)%s+(%d+)$")
     if start and finish and step then
-        return {
-            start = tonumber(start),
-            finish = tonumber(finish),
-            step = tonumber(step)
-        }
+        return { start = tonumber(start), finish = tonumber(finish), step = tonumber(step) }
     end
     return nil
 end
 
--- Split a string by '&&' and trim whitespace
 local function SplitOptionNames(str)
     local names = {}
     for chunk in string.gmatch(str, "([^&]+)") do
-        -- trim leading/trailing whitespace
         local name = chunk:gsub("^%s+", ""):gsub("%s+$", "")
         if name ~= "" then table.insert(names, name) end
     end
     return names
 end
 
--- Converts the given value (string or number) for a bind.
--- Uses caching so if the value hasn't changed, it returns the previously converted value.
--- Also handles the special "increment" command.
 local function ConvertValue(bind, value)
     if bind.lastValue and bind.lastValue.original == value then
         return bind.lastValue.converted
     end
 
-    -- Check for the "increment" command
     local incrementData = ParseIncrement(value)
     if incrementData then
         bind.incrementData = incrementData
@@ -87,15 +103,12 @@ local function ConvertValue(bind, value)
         return converted
     end
 
-    -- Convert value normally (attempt to convert to a number)
     local num = tonumber(value)
     local converted
     if num then
         converted = num % 1 == 0 and math.floor(num) or num
-        print(("Wilbind: Converted value '%s' to %s"):format(value, math.type(converted) or "float"))
     else
         converted = (value ~= "" and value) or "0"
-        print("Wilbind: Keeping value as string: " .. converted)
     end
 
     bind.incrementData = nil
@@ -103,7 +116,6 @@ local function ConvertValue(bind, value)
     return converted
 end
 
--- Handles the increment logic: increases the current value by step and resets when exceeding the finish value.
 local function HandleIncrement(bind)
     if not bind.incrementData then return bind.currentValue end
 
@@ -118,12 +130,9 @@ end
 -- Filesystem & Configuration Handling
 --------------------------------------------------------------------------------
 
--- Utility function: Ensures the config folder exists.
--- It attempts to create the directory, and if that fails, checks if it already exists.
 local function ensureConfigDirectoryExists()
-    local success, fullPath = filesystem.CreateDirectory(configFolder)
+    local success, _ = filesystem.CreateDirectory(configFolder)
     if not success then
-        -- It might fail because the directory already exists.
         local attributes = filesystem.GetFileAttributes(configFolder)
         if not attributes then
             print("Wilbind: Failed to create config directory!")
@@ -133,19 +142,17 @@ local function ensureConfigDirectoryExists()
     return true
 end
 
--- Saves the current bind configuration to a file.
 local function SaveSettings()
-    if not ensureConfigDirectoryExists() then
-        return
-    end
+    if not ensureConfigDirectoryExists() then return end
 
     local config = {
         globalEnable = globalEnableCheckbox:IsChecked(),
         disableInMenu = disableInMenuCheckbox:IsChecked(),
+        menuX = menu.X,
+        menuY = menu.Y,
         keybinds = {}
     }
 
-    -- Collect settings for each bind.
     for uuid, bind in pairs(binds) do
         config.keybinds[uuid] = {
             enabled    = bind.enableCheckbox:IsChecked(),
@@ -156,12 +163,13 @@ local function SaveSettings()
         }
     end
 
-    -- Open the configuration file for writing.
     local file = io.open(configPath, "w")
     if file then
         file:write("return {\n")
         file:write("globalEnable = " .. tostring(config.globalEnable) .. ",\n")
         file:write("disableInMenu = " .. tostring(config.disableInMenu) .. ",\n")
+        file:write("menuX = " .. tostring(config.menuX) .. ",\n")
+        file:write("menuY = " .. tostring(config.menuY) .. ",\n")
         file:write("keybinds = {\n")
         for uuid, bind in pairs(config.keybinds) do
             file:write(string.format([[
@@ -183,11 +191,8 @@ local function SaveSettings()
     end
 end
 
--- Loads the bind configuration from a file.
 local function LoadSettings()
-    if not ensureConfigDirectoryExists() then
-        return
-    end
+    if not ensureConfigDirectoryExists() then return end
 
     local file = io.open(configPath, "r")
     if not file then
@@ -199,18 +204,16 @@ local function LoadSettings()
     file:close()
     
     local chunk, err = load(content)
-    if not chunk then
-        print("Wilbind: Config load failed:", err)
-        return
-    end
+    if not chunk then return end
 
     local success, config = pcall(chunk)
-    if not success then
-        print("Wilbind: Config parse failed:", config)
-        return
+    if not success then return end
+
+    if config.menuX and config.menuY then
+        menu.X = config.menuX
+        menu.Y = config.menuY
     end
 
-    -- Remove any existing components from the menu.
     if globalEnableCheckbox then menu:RemoveComponent(globalEnableCheckbox) end
     if disableInMenuCheckbox then menu:RemoveComponent(disableInMenuCheckbox) end
     for uuid, bind in pairs(binds) do
@@ -223,11 +226,9 @@ local function LoadSettings()
     end
     binds = {}
 
-    -- Recreate global checkboxes with loaded values.
-    globalEnableCheckbox = menu:AddComponent(MenuLib.Checkbox("Enable All Binds", config.globalEnable))
-    disableInMenuCheckbox = menu:AddComponent(MenuLib.Checkbox("Disable Binds At Menu", config.disableInMenu))
+    globalEnableCheckbox = menu:AddComponent(wilgui.Checkbox("Enable All Binds", config.globalEnable))
+    disableInMenuCheckbox = menu:AddComponent(wilgui.Checkbox("Disable Binds At Menu", config.disableInMenu))
 
-    -- Recreate each saved bind.
     for uuid, bindData in pairs(config.keybinds or {}) do
         local newUUID = GenerateUUID()
         local bindContainer = {
@@ -240,15 +241,14 @@ local function LoadSettings()
             incrementData     = nil
         }
 
-        bindContainer.enableCheckbox = menu:AddComponent(MenuLib.Checkbox("Enabled", bindData.enabled))
-        bindContainer.keybind = menu:AddComponent(MenuLib.Keybind("Key", bindData.key, ItemFlags.FullWidth))
-        bindContainer.modeCombo = menu:AddComponent(MenuLib.Combo("Mode", {"Press", "Hold", "Toggle"}, ItemFlags.FullWidth))
+        bindContainer.enableCheckbox = menu:AddComponent(wilgui.Checkbox("Enabled", bindData.enabled))
+        bindContainer.keybind = menu:AddComponent(wilgui.Keybind("Key", bindData.key, wilgui.ItemFlags.FullWidth))
+        bindContainer.modeCombo = menu:AddComponent(wilgui.Combo("Mode", {"Press", "Hold", "Toggle"}, wilgui.ItemFlags.FullWidth))
         bindContainer.modeCombo:Select(bindData.mode)
-        bindContainer.optionNameBox = menu:AddComponent(MenuLib.Textbox("Option Name", bindData.optionName))
-        bindContainer.optionValueBox = menu:AddComponent(MenuLib.Textbox("Value", bindData.optionValue))
+        bindContainer.optionNameBox = menu:AddComponent(wilgui.Textbox("Option Name", bindData.optionName))
+        bindContainer.optionValueBox = menu:AddComponent(wilgui.Textbox("Value", bindData.optionValue))
         
-        -- Removal button for this bind.
-        bindContainer.removeButton = menu:AddComponent(MenuLib.Button("Remove", function()
+        bindContainer.removeButton = menu:AddComponent(wilgui.Button("Remove", function()
             menu:RemoveComponent(bindContainer.enableCheckbox)
             menu:RemoveComponent(bindContainer.keybind)
             menu:RemoveComponent(bindContainer.modeCombo)
@@ -256,7 +256,7 @@ local function LoadSettings()
             menu:RemoveComponent(bindContainer.optionValueBox)
             menu:RemoveComponent(bindContainer.removeButton)
             binds[newUUID] = nil
-        end, ItemFlags.FullWidth))
+        end, wilgui.ItemFlags.FullWidth))
 
         binds[newUUID] = bindContainer
     end
@@ -268,14 +268,11 @@ end
 -- Menu Component Setup
 --------------------------------------------------------------------------------
 
--- Buttons to save and load the configuration.
-menu:AddComponent(MenuLib.Button("Save Config", SaveSettings, ItemFlags.FullWidth))
-menu:AddComponent(MenuLib.Button("Load Config", LoadSettings, ItemFlags.FullWidth))
+menu:AddComponent(wilgui.Button("Save Config", SaveSettings, wilgui.ItemFlags.FullWidth))
+menu:AddComponent(wilgui.Button("Load Config", LoadSettings, wilgui.ItemFlags.FullWidth))
 
--- Button to add a new bind.
-menu:AddComponent(MenuLib.Button("Add New Bind", function()
+menu:AddComponent(wilgui.Button("Add New Bind", function()
     local newUUID = GenerateUUID()
-    
     local bindContainer = {
         prevKeyState      = false,
         holdOriginalValue = nil,
@@ -286,15 +283,13 @@ menu:AddComponent(MenuLib.Button("Add New Bind", function()
         incrementData     = nil
     }
 
-    -- Create components with default values.
-    bindContainer.enableCheckbox = menu:AddComponent(MenuLib.Checkbox("Enabled", true))
-    bindContainer.keybind = menu:AddComponent(MenuLib.Keybind("Key", KEY_INSERT, ItemFlags.FullWidth))
-    bindContainer.modeCombo = menu:AddComponent(MenuLib.Combo("Mode", {"Press", "Hold", "Toggle"}, ItemFlags.FullWidth))
-    bindContainer.optionNameBox = menu:AddComponent(MenuLib.Textbox("Name", ""))
-    bindContainer.optionValueBox = menu:AddComponent(MenuLib.Textbox("Value", ""))
+    bindContainer.enableCheckbox = menu:AddComponent(wilgui.Checkbox("Enabled", true))
+    bindContainer.keybind = menu:AddComponent(wilgui.Keybind("Key", KEY_INSERT, wilgui.ItemFlags.FullWidth))
+    bindContainer.modeCombo = menu:AddComponent(wilgui.Combo("Mode", {"Press", "Hold", "Toggle"}, wilgui.ItemFlags.FullWidth))
+    bindContainer.optionNameBox = menu:AddComponent(wilgui.Textbox("Name", ""))
+    bindContainer.optionValueBox = menu:AddComponent(wilgui.Textbox("Value", ""))
     
-    -- Removal button for this new bind.
-    bindContainer.removeButton = menu:AddComponent(MenuLib.Button("Remove", function()
+    bindContainer.removeButton = menu:AddComponent(wilgui.Button("Remove", function()
         menu:RemoveComponent(bindContainer.enableCheckbox)
         menu:RemoveComponent(bindContainer.keybind)
         menu:RemoveComponent(bindContainer.modeCombo)
@@ -302,28 +297,23 @@ menu:AddComponent(MenuLib.Button("Add New Bind", function()
         menu:RemoveComponent(bindContainer.optionValueBox)
         menu:RemoveComponent(bindContainer.removeButton)
         binds[newUUID] = nil
-    end, ItemFlags.FullWidth))
+    end, wilgui.ItemFlags.FullWidth))
 
     binds[newUUID] = bindContainer
-end, ItemFlags.FullWidth))
+end, wilgui.ItemFlags.FullWidth))
 
--- Global control checkboxes (positioned after the "Add New Bind" button).
-globalEnableCheckbox = menu:AddComponent(MenuLib.Checkbox("Enable All Binds", true))
-disableInMenuCheckbox = menu:AddComponent(MenuLib.Checkbox("Disable Binds At Menu", true))
+globalEnableCheckbox = menu:AddComponent(wilgui.Checkbox("Enable All Binds", true))
+disableInMenuCheckbox = menu:AddComponent(wilgui.Checkbox("Disable Binds At Menu", true))
 
 --------------------------------------------------------------------------------
 -- Main Logic and Callbacks
 --------------------------------------------------------------------------------
 
--- The Draw callback is executed every frame.
--- It checks global and individual bind conditions and applies the bind actions.
 local function OnDraw()
-    -- Determine if binds are allowed based on the global checkboxes and whether the menu is open.
     local allowByGlobal = globalEnableCheckbox:IsChecked()
     local allowByMenu = not disableInMenuCheckbox:IsChecked() or not gui.IsMenuOpen()
 
     for uuid, bind in pairs(binds) do
-        -- Skip if this bind is disabled.
         if not bind.enableCheckbox:IsChecked() then goto continue end
         if not allowByGlobal then goto continue end
         if not allowByMenu then goto continue end
@@ -331,19 +321,14 @@ local function OnDraw()
         local currentKey = bind.keybind:GetValue()
         local currentKeyState = input.IsButtonDown(currentKey)
         local modeIndex = bind.modeCombo:GetSelectedIndex()
-        -- support multiple option names
+        
         local rawNames    = bind.optionNameBox:GetValue()
         local optionNames = SplitOptionNames(rawNames)
         local optionValue = ConvertValue(bind, bind.optionValueBox:GetValue())
 
-        -- Skip if no option name is provided.
         if #optionNames == 0 then goto continue end
 
-        -- Process bind according to its mode:
-        local rawNames    = bind.optionNameBox:GetValue()
-        local optionNames = SplitOptionNames(rawNames)
-
-        if modeIndex == 1 and not engine.IsChatOpen() then  -- Press mode: Trigger on key press (transition from off to on)
+        if modeIndex == 1 and not engine.IsChatOpen() then  -- Press mode
             if currentKeyState and not bind.prevKeyState then
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
                 for _, optionName in ipairs(optionNames) do
@@ -352,7 +337,7 @@ local function OnDraw()
                 end
             end
 
-        elseif modeIndex == 2 then  -- Hold mode: Set value while key is held; restore when released
+        elseif modeIndex == 2 then  -- Hold mode
             if currentKeyState and not bind.prevKeyState then
                 bind.holdOriginalValue = {}
                 local finalValue = bind.incrementData and HandleIncrement(bind) or optionValue
@@ -369,7 +354,7 @@ local function OnDraw()
                 bind.holdOriginalValue = nil
             end
 
-        elseif modeIndex == 3 and not engine.IsChatOpen() then  -- Toggle mode: Switch between two states on key press
+        elseif modeIndex == 3 and not engine.IsChatOpen() then  -- Toggle mode
             if currentKeyState and not bind.prevKeyState then
                 bind.toggleState = not bind.toggleState
                 if bind.toggleState then
@@ -395,28 +380,39 @@ local function OnDraw()
     end
 end
 
--- OnUnload callback to clean up when the script is unloaded.
+-- OnUnload callback prevents menu ghosting and safely handles array iterations
 local function OnUnload()
     print("Wilbind: Unloading...")
-    -- Restore original values for binds that are in a hold or toggle state.
     for _, bind in pairs(binds) do
-        local optionName = bind.optionNameBox:GetValue()
+        local rawNames = bind.optionNameBox:GetValue()
+        local optionNames = SplitOptionNames(rawNames)
+        
         if bind.holdOriginalValue then
-            gui.SetValue(optionName, bind.holdOriginalValue)
-            client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
+            for _, optionName in ipairs(optionNames) do
+                if bind.holdOriginalValue[optionName] then
+                    gui.SetValue(optionName, bind.holdOriginalValue[optionName])
+                    client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
+                end
+            end
         end
         if bind.toggleOriginalValue then
-            gui.SetValue(optionName, bind.toggleOriginalValue)
-            client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
+            for _, optionName in ipairs(optionNames) do
+                if bind.toggleOriginalValue[optionName] then
+                    gui.SetValue(optionName, bind.toggleOriginalValue[optionName])
+                    client.ChatPrintf(optionName..": "..gui.GetValue(optionName))
+                end
+            end
         end
     end
-    MenuLib.RemoveMenu(menu)
+    
+    if wilgui and menu then
+        wilgui.RemoveMenu(menu)
+    end
     print("Wilbind: Unloaded successfully")
 end
 
--- Register the Draw and Unload callbacks.
-callbacks.Register("Draw", OnDraw)
-callbacks.Register("Unload", OnUnload)
+callbacks.Register("Draw", "wilbind_Draw", OnDraw)
+callbacks.Register("Unload", "wilbind_Unload", OnUnload)
 
--- Attempt to load saved configuration on startup.
+-- Automatically loads settings to construct UI elements on startup
 LoadSettings()
