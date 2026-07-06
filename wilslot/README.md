@@ -1,31 +1,32 @@
-# Wilslot
-Amalgam have this epic feature to bind something to selected weapon slot or class. For example you have different aimbot for soldier rocket launcher and shotgun. I thought that it would be cool to have this for LMAOBOX and here we are.
+# WilSlot
+Amalgam has a feature to bind options directly to selected weapon slots or classes. This script ports this capability to LMAOBOX, allowing you to configure different setups for distinct classes and loadouts (e.g., soldier rocket launcher vs. shotgun).
 
 ![screen1](https://i.imgur.com/sPvMCdz.png)
+
 ## Features
-- Config saving system (Team Fortress 2/wilconfig).
-- Enable / Disable all binds. 
-- Bind something to class, weapon slot or both. 
+- **Config Saving System** (Saved in `wilconfigs/wilslot.cfg`).
+- **Remember Menu Position**: Drag positions are saved dynamically to configuration.
+- **Multi-Column Layout**: Slider lets you specify binds per column to keep the interface compact.
+- **Anti-Out-of-Bounds**: Clamps menu drag safely to your screen area.
+- **Global Toggle**: Enable/disable all loadout slot conditions globally.
+- **Class & Slot Matching**: Bind values to specific classes, active weapon loadout slots, or both.
+- **Multiple Options Support (`&&`)**: Execute multiple commands simultaneously under a single condition.
+
 ## Requirements
-- [Menu.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/Menu.lua)
-    - It's my fork of [LNX's](https://github.com/lnx00/) [Menu.lua](https://github.com/lnx00/Lmaobox-Lua/blob/main/src/MenuLib/Menu.lua).
-        - I added support for typing '(' or ')'.
-        - Menu shows up with LMAOBOX's menu on INSERT - original shows up on main/pause menu.
-    - Feel free to use original one, but my forks will give the best experience.
+- [wilgui.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilgui/wilgui.lua)
+    - An optimized, auto-updating fork of LNX's Menu library that adds multi-column support, limits drag borders, and prevents overlap crashes.
+
 ## How to use
-- Put [wilslot.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilslot/wilslot.lua) & [Menu.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/Menu.lua) to your %LOCALAPPDATA%.
-- Refresh and load wilslot in LUA tab in LMAOBOX.
-- Add bind and select desired conditions to activate bind and type "Option Name" from LMAOBOX's menu and "Value" for it.
-    - Example: Scout > 2 > aim method > silent - When you play scout and switch to pistol, your aim method will be switched to silent and returns back when conditions are not met.
-## Known issues
-- Menu don't support scrolling. More than 8 binds will out of bounds yours screen.
-    - You can manually edit wilconfigs/wilslot.cfg in your TF2 directory and add or edit binds by coping other ones. Try to not brake anything...
-- After loading settings "Class" or "Weapon Slot" from drop list is always highlighted as "Any", but stored value is correct. Idk how to fix it, it's Menu.lua library issue.
-- Name of binds next to checkboxes only update when you are connected to server.
+- Place [wilslot.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilslot/wilslot.lua) & [wilgui.lua](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilgui/wilgui.lua) in your `%LOCALAPPDATA%` (or game's lua directory).
+- Refresh and load **wilslot** in LMAOBOX.
+- Add a bind and select the conditional filters (e.g. Class, Slot) to apply the variable.
+    - *Example*: `Scout > 2 > aim method > silent` (while playing Scout and holding your secondary weapon, aim method changes to silent).
+
 ## PS
-- Please also check [WilBind](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilbind/README.md), my other keybinds manager.
-- When you are typing anything always open a console in the game, because some letters like 'M' can open a menu.
-- Code is deeply commented so you can easily edit it, and if you find any issues report it to me [here](https://github.com/GNWilber/lmaobox-luas-public/issues).
+- Check out [WilBind](https://github.com/GNWilber/lmaobox-luas-public/blob/main/wilbind/README.md) for custom key input binds.
+- Keep the game console open when typing option names to prevent typing from triggering default binds.
+- Code is heavily commented. Bug reports can be submitted [here](https://github.com/GNWilber/lmaobox-luas-public/issues).
+
 ### Special thanks to
-- [LNX](https://github.com/lnx00/) - Menu library
-- AI - Helped me with comments and code
+- [LNX](https://github.com/lnx00/) — Original menu base design
+- **AI** — Assistance with logic, safety features, and layout structure
