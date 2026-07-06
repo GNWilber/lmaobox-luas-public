@@ -5,50 +5,92 @@
     Version - 1.00
 --]]
 
+local VERSION = 1.00
+local RAW_GITHUB_URL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/critinfo/critinfo.lua"
+
 local indicator = draw.CreateFont('Verdana', 16, 700, FONTFLAG_CUSTOM | FONTFLAG_OUTLINE)
 local panelX, panelY = 10, 350  -- Adjust these values for top-left offset
 
-callbacks.Register("Draw", function()
-    local width, height = draw.GetScreenSize()
-    -- Use the panelX and panelY for positioning
-    draw.SetFont(indicator)
+-- ==========================================
+-- Auto-Updater System
+-- ==========================================
+local function CheckForUpdates()
+    http.Get(RAW_GITHUB_URL, function(success, response)
+        if not success or not response then return end
+        
+        -- Parse the version number from the fetched remote code
+        local remote_version_str = string.match(response, "Version%s*-%s*([%d%.]+)")
+        if not remote_version_str then return end
+        
+        local remote_version = tonumber(remote_version_str)
+        if remote_version and remote_version > VERSION then
+            print("[CritInfo] Update found! Downloading version " .. remote_version .. "...")
+            
+            -- GetScriptName() gets the current relative path (e.g., "critinfo\critinfo.lua")
+            local file = io.open(GetScriptName(), "w")
+            if file then
+                file:write(response)
+                file:close()
+                print("[CritInfo] Successfully updated! Please Unload and Reload the script.")
+                client.Command('play "ui/buttonclick.wav"', true) -- Play notification sound
+            else
+                print("[CritInfo] Error: Failed to open file for writing the update.")
+            end
+        end
+    end)
+end
 
-    -- Fetch the local player and active weapon
+-- Run update check once on load
+CheckForUpdates()
+
+-- ==========================================
+-- Main Drawing Callback
+-- ==========================================
+callbacks.Register("Draw", function()
     local me = entities.GetLocalPlayer()
-    if not me then
+    if not me or not me:IsAlive() then
         return
     end
 
     local wpn = me:GetPropEntity('m_hActiveWeapon')
-    if not wpn or not me:IsAlive() then
+    if not wpn then
+        return
+    end
+
+    local weaponBaseDamage = wpn:GetWeaponBaseDamage()
+    
+    -- Safety check: Prevent errors/division by zero on weapons that deal 0 damage (Medigun, PDA, etc.)
+    if not weaponBaseDamage or weaponBaseDamage <= 0 then
         return
     end
 
     -- Fetching necessary crit-related info
     local critTokenBucket = wpn:GetCritTokenBucket()
-    local critCheckCount = wpn:GetCritCheckCount()  -- Fetching actual crit check count
-    local critSeedRequestCount = wpn:GetCritSeedRequestCount()  -- Fetching actual crit seed request count
+    local critCheckCount = wpn:GetCritCheckCount()
+    local critSeedRequestCount = wpn:GetCritSeedRequestCount()
     local critChance = wpn:GetCritChance()
-    local critCost = wpn:GetCritCost(critTokenBucket, critSeedRequestCount, critCheckCount)  -- Using real data
-    local weaponBaseDamage = wpn:GetWeaponBaseDamage()  -- Added weapon base damage
+    local critCost = wpn:GetCritCost(critTokenBucket, critSeedRequestCount, critCheckCount)
     local dmgStats = wpn:GetWeaponDamageStats()
     local totalDmg = dmgStats["total"]
     local criticalDmg = dmgStats["critical"]
-    local cmpCritChance = critChance + 0.1  -- Add 0.1 to crit chance, as in the provided code
+    
+    local cmpCritChance = critChance + 0.1
     local requiredDamage = 0
+    local shotsNeededForTokens = 0
 
     -- Calculate how many shots we need to fill the crit token bucket
-    local shotsNeededForTokens = 0
     if critTokenBucket < critCost then
         local missingToken = critCost - critTokenBucket
-        shotsNeededForTokens = math.ceil(missingToken / weaponBaseDamage)  -- Shots needed to fill the bucket
+        shotsNeededForTokens = math.ceil(missingToken / weaponBaseDamage) 
     end
 
-    -- Calculate how much more damage we need for crit
-    local requiredTotalDamage = (criticalDmg * (2.0 * cmpCritChance + 1.0)) / cmpCritChance / 3.0
-    requiredDamage = math.floor(requiredTotalDamage - totalDmg)
+    -- Calculate how much more damage we need for crit safely
+    if cmpCritChance > 0 then
+        local requiredTotalDamage = (criticalDmg * (2.0 * cmpCritChance + 1.0)) / cmpCritChance / 3.0
+        requiredDamage = math.floor(requiredTotalDamage - totalDmg)
+    end
 
-    -- Ensure the damage isn't negative (show zero if no more damage is required)
+    -- Ensure the damage isn't negative
     if requiredDamage < 0 then
         requiredDamage = 0
     end
@@ -58,27 +100,39 @@ callbacks.Register("Draw", function()
 
     -- If we need to fire more shots for crit token
     if critTokenBucket < critCost then
-        table.insert(data, "Shots needed for crit: " .. shotsNeededForTokens)
+        table.insert(data, { text = "Shots needed for crit: " .. shotsNeededForTokens, color = {198, 255, 167, 255} }) -- Light green
     end
 
-    -- Always display damage needed for crit
+    -- Always display damage needed for crit (if above 0)
     if requiredDamage > 0 then
-        table.insert(data, "Damage needed for crit: " .. requiredDamage)
+        table.insert(data, { text = "Damage needed for crit: " .. requiredDamage, color = {255, 164, 164, 255} }) -- Light red
     end
 
-    -- Display the info text using panelX, panelY for top-left position
-    local offsetY = panelY  -- Start from the top left offset
+    -- Only draw if we have something to display
+    if #data > 0 then
+        draw.SetFont(indicator)
 
-    for _, line in ipairs(data) do
-        -- Different colors based on what we're displaying
-        if string.find(line, "Shots needed for crit") then
-            draw.Color(219, 255, 199, 255)  -- Color for shots needed (light greenrgb(198, 255, 167))
-        elseif string.find(line, "Damage needed for crit") then
-            draw.Color(255, 217, 217, 255)  -- Color for damage needed (light redrgb(255, 164, 164))
+        -- Pre-calculate background box sizes for aesthetic visuals
+        local maxWidth = 0
+        local totalHeight = 0
+        for _, item in ipairs(data) do
+            local txtWidth, txtHeight = draw.GetTextSize(item.text)
+            if txtWidth > maxWidth then maxWidth = txtWidth end
+            totalHeight = totalHeight + txtHeight + 5
         end
 
-        local txtWidth, txtHeight = draw.GetTextSize(line)
-        draw.Text(panelX, offsetY, line)  -- Draw at the specified position
-        offsetY = offsetY + txtHeight + 5  -- Move down for next line
+        -- Draw semi-transparent background box
+        draw.Color(0, 0, 0, 160)
+        draw.FilledRect(panelX - 5, panelY - 5, panelX + maxWidth + 5, panelY + totalHeight)
+
+        -- Draw text lines
+        local offsetY = panelY
+        for _, item in ipairs(data) do
+            draw.Color(item.color[1], item.color[2], item.color[3], item.color[4])
+            draw.Text(panelX, offsetY, item.text)
+            
+            local _, txtHeight = draw.GetTextSize(item.text)
+            offsetY = offsetY + txtHeight + 5  -- Move down for next line
+        end
     end
 end)
