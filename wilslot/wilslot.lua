@@ -1,133 +1,148 @@
 --[[
     Wilslot - Weapon slot and class bind manager for LMAOBOX
-    GitHub - (https://github.com/GNWilber/lmaobox-luas-public/wilslot/README.md)
+    GitHub - (https://github.com/GNWilber/lmaobox-luas-public/main/wilslot)
     Author - Wilber (https://github.com/GNWilber)
-    Version - 1.01 - Added pulling library from GitHub
-    Required library - Menu.lib (https://github.com/GNWilber/lmaobox-luas-public/Menu.lua)
+    Version - 1.02
 --]]
 
--- local MenuLib = load(http.Get("https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/refs/heads/main/Menu.lua"))()
-local MenuLib = require("Menu")
+local Version = 1.02
+local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilslot/wilslot.lua"
 
--- Version check for required Menu library
-assert(MenuLib.Version >= 1.52, "Wilslot: MenuLib version is too old! Current version: " .. MenuLib.Version)
+-- =======================
+-- Auto Update Logic
+-- =======================
+pcall(function()
+    local content = http.Get(RepoURL)
+    if not content or content == "" then return end
+    local remoteVerStr = string.match(content, "Version%s*-%s*([%d%.]+)")
+    if not remoteVerStr then return end
+    local remoteVer = tonumber(remoteVerStr)
+    if remoteVer and remoteVer > Version then
+        print("[Wilslot] Found newer version (" .. remoteVer .. "). Updating...")
+        local f = io.open("wilslot.lua", "w")
+        if f then f:write(content); f:close(); print("[Wilslot] Successfully updated! Please reload your lua script.") end
+    end
+end)
 
--- Configuration constants (folder and file path for saving settings)
+-- =======================
+-- Load wilgui framework
+-- =======================
+local success, wilgui = pcall(require, "wilgui")
+if not success then
+    print("[Wilslot ERROR] wilgui.lua is missing or corrupted! Please place it in your lua folder.")
+    return
+end
+
 local configFolder = "wilconfigs"
 local configPath = configFolder .. "/wilslot.cfg"
 
--- Create the main menu for the bind manager (named "Wilslot")
-local menu = MenuLib.Create("Wilslot", MenuFlags.AutoSize)
-menu:SetPosition(600, 0)  -- Updated menu position
-print("Wilslot: Menu initialized")
+-- Remove ONLY Wilslot's menu on script reload, protecting wilcrit and wilbind
+for i = #wilgui.Menus, 1, -1 do
+    if wilgui.Menus[i].Title == "Wilslot" then table.remove(wilgui.Menus, i) end
+end
 
--- Cosmetic customization for the menu window
-menu.Style.Space    = 1
+local menu = wilgui.Create("Wilslot", wilgui.MenuFlags.AutoSize)
+print("Wilslot: Menu initialized")
+menu:SetPosition(600, 100)
+menu.Style.Space = 1
 menu.Style.WindowBg = { 30, 30, 30, 240 }
 menu.Style.TitleBg  = { 0, 106, 255, 240 }
 menu.Style.Item     = { 60, 60, 60, 240 }
--- menu.Style.Font = draw.CreateFont("Verdana", 14, 510) -- Uncomment if desired
 
--- Global state
-local binds = {}         -- Table keyed by bind UUID; each value is a bind container.
-local bindOrder = {}     -- Array (ordered list) of bind UUIDs (to preserve the order in the menu).
-local uuidCounter = 0    -- Counter for generating unique IDs.
-local globalEnableCheckbox  -- Global enable checkbox (only one, not the "disable at menu" one).
+-- State Variables
+local binds = {}
+local bindOrder = {}
+local uuidCounter = 0
+local lastMenuX, lastMenuY = menu.X, menu.Y
 
---------------------------------------------------------------------------------
--- Mapping Tables for Class and Weapon Slot
---------------------------------------------------------------------------------
--- For the Class combobox:
--- Index 1: "Any" (i.e. no check), then:
--- 2: Scout (1), 3: Soldier (3), 4: Pyro (7), 5: Demoman (4),
--- 6: Heavy (6), 7: Engineer (9), 8: Medic (5), 9: Sniper (2), 10: Spy (8)
+local saveBtn, loadBtn, addBtn
+local globalEnableCheckbox, bindsPerColSlider
+local lastBindsPerCol = 3
+
+-- Mapping Tables
 local classOptions = { "Any", "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy" }
 local classMap = { [1] = nil, [2] = 1, [3] = 3, [4] = 7, [5] = 4, [6] = 6, [7] = 9, [8] = 5, [9] = 2, [10] = 8 }
 
--- For the Weapon Slot combobox:
--- Index 1: "Any" (no check), then:
--- 2: "1" corresponds to slot 0, 3: "2" to slot 1, 4: "3" to slot 2, 5: "4" to slot 3, 6: "5" to slot 4.
 local slotOptions = { "Any", "1", "2", "3", "4", "5" }
 local slotMap = { [1] = nil, [2] = 0, [3] = 1, [4] = 2, [5] = 3, [6] = 4 }
 
 --------------------------------------------------------------------------------
 -- Helper Functions
 --------------------------------------------------------------------------------
-
--- Generates a unique ID for each bind.
 local function GenerateUUID()
     uuidCounter = uuidCounter + 1
     return string.format("%X-%X", os.time(), uuidCounter)
 end
 
--- (Same as before:) Parses an "increment" command string.
+local function SplitOptionNames(str)
+    local names = {}
+    for chunk in string.gmatch(str, "([^&]+)") do
+        local name = chunk:gsub("^%s+", ""):gsub("%s+$", "")
+        if name ~= "" then table.insert(names, name) end
+    end
+    return names
+end
+
 local function ParseIncrement(value)
     if type(value) ~= "string" then return nil end
     local start, finish, step = value:match("^increment%s+(%d+)%s+(%d+)%s+(%d+)$")
-    if start and finish and step then
-        return {
-            start = tonumber(start),
-            finish = tonumber(finish),
-            step = tonumber(step)
-        }
-    end
+    if start and finish and step then return { start = tonumber(start), finish = tonumber(finish), step = tonumber(step) } end
     return nil
 end
 
--- Converts a given value (string or number) and caches it.
 local function ConvertValue(bind, value)
-    if bind.lastValue and bind.lastValue.original == value then
-        return bind.lastValue.converted
-    end
-
+    if bind.lastValue and bind.lastValue.original == value then return bind.lastValue.converted end
     local incrementData = ParseIncrement(value)
     if incrementData then
-        bind.incrementData = incrementData
-        bind.currentValue = incrementData.start
-        local converted = incrementData.start
-        bind.lastValue = { original = value, converted = converted }
-        return converted
+        bind.incrementData = incrementData; bind.currentValue = incrementData.start
+        bind.lastValue = { original = value, converted = incrementData.start }; return incrementData.start
     end
-
     local num = tonumber(value)
-    local converted
-    if num then
-        converted = (num % 1 == 0) and math.floor(num) or num
-        print(("Wilslot: Converted value '%s' to %s"):format(value, math.type(converted) or "float"))
-    else
-        converted = (value ~= "" and value) or "0"
-        print("Wilslot: Keeping value as string: " .. converted)
-    end
-
-    bind.incrementData = nil
-    bind.lastValue = { original = value, converted = converted }
-    return converted
+    local converted = num and (num % 1 == 0 and math.floor(num) or num) or ((value ~= "" and value) or "0")
+    bind.incrementData = nil; bind.lastValue = { original = value, converted = converted }; return converted
 end
-
--- (Optional) Increment handler (if you ever need it)
-local function HandleIncrement(bind)
-    if not bind.incrementData then return bind.currentValue end
-    bind.currentValue = bind.currentValue + bind.incrementData.step
-    if bind.currentValue > bind.incrementData.finish then
-        bind.currentValue = bind.incrementData.start
-    end
-    return bind.currentValue
-end
-
---------------------------------------------------------------------------------
--- Filesystem & Configuration Handling
---------------------------------------------------------------------------------
 
 local function ensureConfigDirectoryExists()
-    local success, fullPath = filesystem.CreateDirectory(configFolder)
+    local success, _ = filesystem.CreateDirectory(configFolder)
     if not success then
-        local attributes = filesystem.GetFileAttributes(configFolder)
-        if not attributes then
-            print("Wilslot: Failed to create config directory!")
-            return false
-        end
+        if not filesystem.GetFileAttributes(configFolder) then return false end
     end
     return true
+end
+
+--------------------------------------------------------------------------------
+-- Menu Layout Builder
+--------------------------------------------------------------------------------
+local function RebuildMenuLayout()
+    menu.Components = {}
+    
+    menu:AddComponent(saveBtn)
+    menu:AddComponent(loadBtn)
+    menu:AddComponent(addBtn)
+    menu:AddComponent(globalEnableCheckbox)
+    menu:AddComponent(bindsPerColSlider)
+    
+    local perCol = bindsPerColSlider:GetValue()
+    
+    for i, uuid in ipairs(bindOrder) do
+        local bind = binds[uuid]
+        
+        if i > 1 and (i - 1) % perCol == 0 then
+            menu:AddComponent(wilgui.ColumnBreak())
+        end
+        
+        -- Dynamically set the title for the checkbox based on active combo selections
+        local cIdx = bind.classCombo:GetSelectedIndex()
+        local sIdx = bind.slotCombo:GetSelectedIndex()
+        bind.enableCheckbox.Label = (classOptions[cIdx] or "Any") .. " | " .. (slotOptions[sIdx] or "Any")
+        
+        menu:AddComponent(bind.enableCheckbox)
+        menu:AddComponent(bind.classCombo)
+        menu:AddComponent(bind.slotCombo)
+        menu:AddComponent(bind.optionNameBox)
+        menu:AddComponent(bind.optionValueBox)
+        menu:AddComponent(bind.removeButton)
+    end
 end
 
 local function SaveSettings()
@@ -135,13 +150,14 @@ local function SaveSettings()
 
     local config = {
         globalEnable = globalEnableCheckbox:IsChecked(),
-        keybinds = {}
+        bindsPerCol = bindsPerColSlider:GetValue(),
+        menuX = menu.X, menuY = menu.Y, keybinds = {}
     }
 
     for _, uuid in ipairs(bindOrder) do
         local bind = binds[uuid]
         config.keybinds[uuid] = {
-            enabled    = bind.enableCheckbox:GetValue(),
+            enabled    = bind.enableCheckbox:IsChecked(),
             classIndex = bind.classCombo:GetSelectedIndex(),
             slotIndex  = bind.slotCombo:GetSelectedIndex(),
             optionName = bind.optionNameBox:GetValue(),
@@ -153,282 +169,175 @@ local function SaveSettings()
     if file then
         file:write("return {\n")
         file:write("globalEnable = " .. tostring(config.globalEnable) .. ",\n")
+        file:write("bindsPerCol = " .. tostring(config.bindsPerCol) .. ",\n")
+        file:write("menuX = " .. tostring(config.menuX) .. ",\n")
+        file:write("menuY = " .. tostring(config.menuY) .. ",\n")
         file:write("keybinds = {\n")
-        for uuid, b in pairs(config.keybinds) do
+        for uuid, bData in pairs(config.keybinds) do
             file:write(string.format([[
-    [%q] = {
-        enabled = %s,
-        classIndex = %d,
-        slotIndex = %d,
-        optionName = %q,
-        optionValue = %q
-    },]], 
-            uuid, tostring(b.enabled), b.classIndex, b.slotIndex, 
-            b.optionName, tostring(b.optionValue)))
+    [%q] = { enabled = %s, classIndex = %d, slotIndex = %d, optionName = %q, optionValue = %q },]], 
+            uuid, tostring(bData.enabled), bData.classIndex, bData.slotIndex, bData.optionName, tostring(bData.optionValue)))
         end
         file:write("\n}\n}")
         file:close()
         print("Wilslot: Config saved successfully!")
-    else
-        print("Wilslot: Failed to save config!")
     end
+end
+
+local function CreateBind(bindData, specificUUID)
+    local bind = {
+        uuid = specificUUID or GenerateUUID(),
+        holdOriginalValue = nil, lastValue = nil, currentValue = nil, incrementData = nil
+    }
+
+    bindData = bindData or {}
+    local isEnabled = bindData.enabled ~= nil and bindData.enabled or true
+    local cIdx = bindData.classIndex or 1
+    local sIdx = bindData.slotIndex or 1
+    local label = (classOptions[cIdx] or "Any") .. " | " .. (slotOptions[sIdx] or "Any")
+    
+    bind.enableCheckbox = wilgui.Checkbox(label, isEnabled)
+    bind.classCombo = wilgui.Combo("Class", classOptions, wilgui.ItemFlags.FullWidth)
+    bind.classCombo:Select(cIdx)
+    bind.slotCombo = wilgui.Combo("Weapon Slot", slotOptions, wilgui.ItemFlags.FullWidth)
+    bind.slotCombo:Select(sIdx)
+    bind.optionNameBox = wilgui.Textbox("Option Name", bindData.optionName or "")
+    bind.optionValueBox = wilgui.Textbox("Value", bindData.optionValue or "")
+    
+    bind.removeButton = wilgui.Button("Remove", function()
+        for i, id in ipairs(bindOrder) do
+            if id == bind.uuid then table.remove(bindOrder, i); break end
+        end
+        binds[bind.uuid] = nil
+        RebuildMenuLayout()
+        SaveSettings()
+    end, wilgui.ItemFlags.FullWidth)
+    
+    return bind
+end
+
+local function AddNewBind()
+    local bind = CreateBind()
+    binds[bind.uuid] = bind
+    table.insert(bindOrder, bind.uuid)
+    RebuildMenuLayout()
 end
 
 local function LoadSettings()
     if not ensureConfigDirectoryExists() then return end
-
     local file = io.open(configPath, "r")
-    if not file then
-        print("Wilslot: No saved config found! Using defaults.")
-        return
-    end
+    if not file then RebuildMenuLayout(); return end
 
-    local content = file:read("*a")
-    file:close()
-    
+    local content = file:read("*a"); file:close()
     local chunk, err = load(content)
-    if not chunk then
-        print("Wilslot: Config load failed:", err)
-        return
-    end
-
+    if not chunk then return end
     local success, config = pcall(chunk)
-    if not success then
-        print("Wilslot: Config parse failed:", config)
-        return
-    end
+    if not success then return end
 
-    -- Remove existing bind components
-    if globalEnableCheckbox then
-        menu:RemoveComponent(globalEnableCheckbox)
-    end
-    for _, uuid in ipairs(bindOrder) do
-        local bind = binds[uuid]
-        menu:RemoveComponent(bind.enableCheckbox)
-        menu:RemoveComponent(bind.classCombo)
-        menu:RemoveComponent(bind.slotCombo)
-        menu:RemoveComponent(bind.optionNameBox)
-        menu:RemoveComponent(bind.optionValueBox)
-        menu:RemoveComponent(bind.removeButton)
-    end
+    if config.menuX and config.menuY then menu.X, menu.Y = config.menuX, config.menuY; lastMenuX, lastMenuY = menu.X, menu.Y end
+    if config.globalEnable ~= nil then globalEnableCheckbox.Value = config.globalEnable end
+    if config.bindsPerCol ~= nil then bindsPerColSlider.Value = config.bindsPerCol end
+
     binds = {}
     bindOrder = {}
-
-    -- Recreate global checkbox
-    globalEnableCheckbox = menu:AddComponent(MenuLib.Checkbox("Enable All Binds", config.globalEnable))
     
-    -- Recreate each saved bind in order.
-    for uuid, bData in pairs(config.keybinds or {}) do
-        local newUUID = GenerateUUID()
-        local bindContainer = {
-            holdOriginalValue = nil,  -- to store the original option value when active
-            lastValue = nil,
-            currentValue = nil,
-            incrementData = nil,
-            dynamicLabel = nil
-        }
-        bindContainer.enableCheckbox = menu:AddComponent(MenuLib.Checkbox(
-            classOptions[bData.classIndex] .. " | " .. slotOptions[bData.slotIndex], 
-            bData.enabled))
-        bindContainer.dynamicLabel = classOptions[bData.classIndex] .. " | " .. slotOptions[bData.slotIndex]
-        bindContainer.classCombo = menu:AddComponent(MenuLib.Combo("Class", classOptions, ItemFlags.FullWidth))
-        bindContainer.classCombo:Select(bData.classIndex)
-        bindContainer.slotCombo = menu:AddComponent(MenuLib.Combo("Weapon Slot", slotOptions, ItemFlags.FullWidth))
-        bindContainer.slotCombo:Select(bData.slotIndex)
-        bindContainer.optionNameBox = menu:AddComponent(MenuLib.Textbox("Option Name", bData.optionName))
-        bindContainer.optionValueBox = menu:AddComponent(MenuLib.Textbox("Value", bData.optionValue))
-        
-        bindContainer.removeButton = menu:AddComponent(MenuLib.Button("Remove", function()
-            menu:RemoveComponent(bindContainer.enableCheckbox)
-            menu:RemoveComponent(bindContainer.classCombo)
-            menu:RemoveComponent(bindContainer.slotCombo)
-            menu:RemoveComponent(bindContainer.optionNameBox)
-            menu:RemoveComponent(bindContainer.optionValueBox)
-            menu:RemoveComponent(bindContainer.removeButton)
-            for i, id in ipairs(bindOrder) do
-                if id == newUUID then
-                    table.remove(bindOrder, i)
-                    break
-                end
-            end
-            binds[newUUID] = nil
-        end, ItemFlags.FullWidth))
-        
-        binds[newUUID] = bindContainer
-        table.insert(bindOrder, newUUID)
+    for uuid, bindData in pairs(config.keybinds or {}) do
+        local newBind = CreateBind(bindData, uuid)
+        binds[uuid] = newBind
+        table.insert(bindOrder, uuid)
     end
-
+    RebuildMenuLayout()
     print("Wilslot: Config loaded successfully!")
 end
 
 --------------------------------------------------------------------------------
--- Rebuild Binds Function
+-- Initialize Top Menu Components
 --------------------------------------------------------------------------------
--- When a bind’s combobox selections change (and thus its dynamic label would change),
--- we remove all bind components and then re‑add them in order so that the new label appears in the proper place.
-local function RebuildBinds()
-    for _, uuid in ipairs(bindOrder) do
-        local bind = binds[uuid]
-        -- Store current state from the old components before removal.
-        local oldCheckboxValue = bind.enableCheckbox:GetValue()
-        local oldClassIndex = bind.classCombo:GetSelectedIndex()
-        local oldSlotIndex = bind.slotCombo:GetSelectedIndex()
-        local oldOptionName = bind.optionNameBox:GetValue()
-        local oldOptionValue = bind.optionValueBox:GetValue()
-        -- Remove the old components.
-        menu:RemoveComponent(bind.enableCheckbox)
-        menu:RemoveComponent(bind.classCombo)
-        menu:RemoveComponent(bind.slotCombo)
-        menu:RemoveComponent(bind.optionNameBox)
-        menu:RemoveComponent(bind.optionValueBox)
-        menu:RemoveComponent(bind.removeButton)
-        -- Compute the new dynamic label.
-        local newLabel = (classOptions[oldClassIndex] or "Any") .. " | " .. (slotOptions[oldSlotIndex] or "Any")
-        bind.dynamicLabel = newLabel
-        -- Recreate the components in the same order.
-        bind.enableCheckbox = menu:AddComponent(MenuLib.Checkbox(newLabel, oldCheckboxValue))
-        bind.classCombo = menu:AddComponent(MenuLib.Combo("Class", classOptions, ItemFlags.FullWidth))
-        bind.classCombo:Select(oldClassIndex)
-        bind.slotCombo = menu:AddComponent(MenuLib.Combo("Weapon Slot", slotOptions, ItemFlags.FullWidth))
-        bind.slotCombo:Select(oldSlotIndex)
-        bind.optionNameBox = menu:AddComponent(MenuLib.Textbox("Option Name", oldOptionName))
-        bind.optionValueBox = menu:AddComponent(MenuLib.Textbox("Value", oldOptionValue))
-        bind.removeButton = menu:AddComponent(MenuLib.Button("Remove", function()
-            menu:RemoveComponent(bind.enableCheckbox)
-            menu:RemoveComponent(bind.classCombo)
-            menu:RemoveComponent(bind.slotCombo)
-            menu:RemoveComponent(bind.optionNameBox)
-            menu:RemoveComponent(bind.optionValueBox)
-            menu:RemoveComponent(bind.removeButton)
-            for i, id in ipairs(bindOrder) do
-                if id == uuid then
-                    table.remove(bindOrder, i)
-                    break
-                end
-            end
-            binds[uuid] = nil
-        end, ItemFlags.FullWidth))
-    end
-end
+saveBtn = wilgui.Button("Save Config", SaveSettings, wilgui.ItemFlags.FullWidth)
+loadBtn = wilgui.Button("Load Config", LoadSettings, wilgui.ItemFlags.FullWidth)
+addBtn  = wilgui.Button("Add New Bind", AddNewBind, wilgui.ItemFlags.FullWidth)
+globalEnableCheckbox  = wilgui.Checkbox("Enable All Binds", true)
+bindsPerColSlider = wilgui.Slider("Binds per Column", 1, 15, 3)
 
---------------------------------------------------------------------------------
--- Menu Component Setup
---------------------------------------------------------------------------------
-
--- Button to save configuration.
-menu:AddComponent(MenuLib.Button("Save Config", SaveSettings, ItemFlags.FullWidth))
--- Button to load configuration.
-menu:AddComponent(MenuLib.Button("Load Config", LoadSettings, ItemFlags.FullWidth))
--- Button to add a new bind.
-menu:AddComponent(MenuLib.Button("Add New Bind", function()
-    local newUUID = GenerateUUID()
-    
-    local bindContainer = {
-        holdOriginalValue = nil,
-        lastValue = nil,
-        currentValue = nil,
-        incrementData = nil,
-        dynamicLabel = "Any | Any"  -- default label (both comboboxes start with "Any")
-    }
-    bindContainer.enableCheckbox = menu:AddComponent(MenuLib.Checkbox("Any | Any", true))
-    bindContainer.classCombo = menu:AddComponent(MenuLib.Combo("Class", classOptions, ItemFlags.FullWidth))
-    bindContainer.slotCombo = menu:AddComponent(MenuLib.Combo("Weapon Slot", slotOptions, ItemFlags.FullWidth))
-    bindContainer.optionNameBox = menu:AddComponent(MenuLib.Textbox("Option Name", ""))
-    bindContainer.optionValueBox = menu:AddComponent(MenuLib.Textbox("Value", ""))
-    bindContainer.removeButton = menu:AddComponent(MenuLib.Button("Remove", function()
-        menu:RemoveComponent(bindContainer.enableCheckbox)
-        menu:RemoveComponent(bindContainer.classCombo)
-        menu:RemoveComponent(bindContainer.slotCombo)
-        menu:RemoveComponent(bindContainer.optionNameBox)
-        menu:RemoveComponent(bindContainer.optionValueBox)
-        menu:RemoveComponent(bindContainer.removeButton)
-        for i, id in ipairs(bindOrder) do
-            if id == newUUID then
-                table.remove(bindOrder, i)
-                break
-            end
-        end
-        binds[newUUID] = nil
-    end, ItemFlags.FullWidth))
-    
-    binds[newUUID] = bindContainer
-    table.insert(bindOrder, newUUID)
-end, ItemFlags.FullWidth))
-
--- Global control checkbox.
-globalEnableCheckbox = menu:AddComponent(MenuLib.Checkbox("Enable All Binds", true))
+LoadSettings()
 
 --------------------------------------------------------------------------------
 -- Main Logic and Callbacks
 --------------------------------------------------------------------------------
-
 local function OnDraw()
-    local localPlayer = entities.GetLocalPlayer()
-    if not localPlayer then return end
+    -- Dynamically update columns if the slider changed
+    local currentBindsPerCol = bindsPerColSlider:GetValue()
+    if currentBindsPerCol ~= lastBindsPerCol then
+        lastBindsPerCol = currentBindsPerCol
+        RebuildMenuLayout()
+        SaveSettings()
+    end
 
-    -- Get current player class (from m_iClass)
-    local currentClass = localPlayer:GetPropInt("m_iClass")
-    -- Get current weapon slot from active weapon (if available)
-    local activeWeapon = localPlayer:GetPropEntity("m_hActiveWeapon")
-    local currentSlot = activeWeapon and activeWeapon:GetLoadoutSlot() or nil
+    -- Auto Save window drag positions securely
+    if (menu.X ~= lastMenuX or menu.Y ~= lastMenuY) and not input.IsButtonDown(MOUSE_LEFT or 107) then
+        lastMenuX, lastMenuY = menu.X, menu.Y
+        SaveSettings()
+    end
 
-    local allowByGlobal = globalEnableCheckbox:IsChecked()
-
-    -- Check whether any bind’s dynamic label is out of date.
-    local rebuildNeeded = false
+    -- Dynamically update label names based on selected combos without full UI redraws
     for _, uuid in ipairs(bindOrder) do
         local bind = binds[uuid]
         local compLabel = (classOptions[bind.classCombo:GetSelectedIndex()] or "Any") .. " | " .. (slotOptions[bind.slotCombo:GetSelectedIndex()] or "Any")
-        if bind.dynamicLabel ~= compLabel then
-            rebuildNeeded = true
-            break
+        if bind.enableCheckbox.Label ~= compLabel then
+            bind.enableCheckbox.Label = compLabel
         end
     end
-    if rebuildNeeded then
-        RebuildBinds()
-    end
 
-    -- Process each bind.
+    local localPlayer = entities.GetLocalPlayer()
+    if not localPlayer then return end
+
+    local currentClass = localPlayer:GetPropInt("m_iClass")
+    local activeWeapon = localPlayer:GetPropEntity("m_hActiveWeapon")
+    local currentSlot = activeWeapon and activeWeapon:GetLoadoutSlot() or nil
+    local allowByGlobal = globalEnableCheckbox:IsChecked()
+
     for _, uuid in ipairs(bindOrder) do
         local bind = binds[uuid]
-        local optionName = bind.optionNameBox:GetValue()
-        if optionName == "" then goto continue end
+        local rawNames = bind.optionNameBox:GetValue()
+        local optionNames = SplitOptionNames(rawNames)
+        
+        if #optionNames == 0 then goto continue end
 
-        -- If global enable is off, restore any active bind.
-        if not allowByGlobal then
+        if not allowByGlobal or not bind.enableCheckbox:IsChecked() then
             if bind.holdOriginalValue then
-                gui.SetValue(optionName, bind.holdOriginalValue)
+                for _, optionName in ipairs(optionNames) do
+                    if bind.holdOriginalValue[optionName] then
+                        gui.SetValue(optionName, bind.holdOriginalValue[optionName])
+                    end
+                end
                 bind.holdOriginalValue = nil
             end
             goto continue
         end
 
-        -- Get target values from the comboboxes.
-        local classIndex = bind.classCombo:GetSelectedIndex()
-        local slotIndex = bind.slotCombo:GetSelectedIndex()
-        local targetClass = classMap[classIndex]   -- nil means "Any"
-        local targetSlot = slotMap[slotIndex]        -- nil means "Any"
-
+        local targetClass = classMap[bind.classCombo:GetSelectedIndex()]
+        local targetSlot = slotMap[bind.slotCombo:GetSelectedIndex()]
         local conditionMet = true
-        if targetClass and targetClass ~= currentClass then
-            conditionMet = false
-        end
-        if targetSlot ~= nil then
-            if currentSlot == nil or targetSlot ~= currentSlot then
-                conditionMet = false
-            end
-        end
 
-        -- If conditions are met and not yet active, store original and apply new value.
+        if targetClass and targetClass ~= currentClass then conditionMet = false end
+        if targetSlot ~= nil and (currentSlot == nil or targetSlot ~= currentSlot) then conditionMet = false end
+
         if conditionMet then
             if not bind.holdOriginalValue then
-                bind.holdOriginalValue = gui.GetValue(optionName)
+                bind.holdOriginalValue = {}
                 local finalValue = ConvertValue(bind, bind.optionValueBox:GetValue())
-                gui.SetValue(optionName, finalValue)
+                for _, optionName in ipairs(optionNames) do
+                    bind.holdOriginalValue[optionName] = gui.GetValue(optionName)
+                    gui.SetValue(optionName, finalValue)
+                end
             end
         else
             if bind.holdOriginalValue then
-                gui.SetValue(optionName, bind.holdOriginalValue)
+                for _, optionName in ipairs(optionNames) do
+                    if bind.holdOriginalValue[optionName] then
+                        gui.SetValue(optionName, bind.holdOriginalValue[optionName])
+                    end
+                end
                 bind.holdOriginalValue = nil
             end
         end
@@ -440,17 +349,20 @@ local function OnUnload()
     print("Wilslot: Unloading...")
     for _, uuid in ipairs(bindOrder) do
         local bind = binds[uuid]
-        local optionName = bind.optionNameBox:GetValue()
+        local rawNames = bind.optionNameBox:GetValue()
+        local optionNames = SplitOptionNames(rawNames)
+        
         if bind.holdOriginalValue then
-            gui.SetValue(optionName, bind.holdOriginalValue)
+            for _, optionName in ipairs(optionNames) do
+                if bind.holdOriginalValue[optionName] then
+                    gui.SetValue(optionName, bind.holdOriginalValue[optionName])
+                end
+            end
         end
     end
-    MenuLib.RemoveMenu(menu)
+    if wilgui and menu then wilgui.RemoveMenu(menu) end
     print("Wilslot: Unloaded successfully")
 end
 
-callbacks.Register("Draw", OnDraw)
-callbacks.Register("Unload", OnUnload)
-
--- Load saved configuration on startup.
-LoadSettings()
+callbacks.Register("Draw", "wilslot_Draw", OnDraw)
+callbacks.Register("Unload", "wilslot_Unload", OnUnload)
