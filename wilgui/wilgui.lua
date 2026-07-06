@@ -1,14 +1,16 @@
 --[[
     wilgui - Generic Framework for Lmaobox
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilgui
-    Author - Wilber
+    Author - Wilber (Forked from LNX)
     Version - 1.00
---]]
+]]
 
 local Version = 1.00
 local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilgui/wilgui.lua"
 
--- Auto Update Logic (Only updates if Remote Version > Local Version)
+-- =======================
+-- Auto Update Logic
+-- =======================
 local function AutoUpdate()
     local content = http.Get(RepoURL)
     if not content or content == "" then return end
@@ -28,165 +30,195 @@ local function AutoUpdate()
 end
 AutoUpdate()
 
-local UILib = {}
-UILib.Windows = {}
-UILib.Mouse = { X = 0, Y = 0, Pressed = false, Down = false, Released = false }
-UILib.DragInfo = { Window = nil, Dragging = false, OffsetX = 0, OffsetY = 0, DraggingSlider = nil }
+local wilgui = {
+    CurrentID = 1,
+    Menus = {},
+    Font = draw.CreateFont("Verdana", 14, 510),
+    Version = Version,
+    DebugInfo = false
+}
 
-local font = draw.CreateFont('Verdana', 12, 400, FONTFLAG_CUSTOM | FONTFLAG_OUTLINE)
-local fontTitle = draw.CreateFont('Verdana', 12, 700, FONTFLAG_CUSTOM | FONTFLAG_OUTLINE)
+MenuFlags = {
+    None = 0,
+    NoTitle = 1 << 0,
+    NoBackground = 1 << 1,
+    NoDrag = 1 << 2,
+    AutoSize = 1 << 3,
+    ShowAlways = 1 << 4,
+    Popup = 1 << 5
+}
 
--- Called by the main script to prevent duplication issues on reload
-function UILib.Clear()
-    UILib.Windows = {}
+ItemFlags = {
+    None = 0,
+    FullWidth = 1 << 0,
+    Active = 1 << 1
+}
+
+local MouseReleased = false
+local DragID = 0
+local DragOffset = { 0, 0 }
+
+local function MouseInBounds(pX, pY, pX2, pY2)
+    local mX = input.GetMousePos()[1]
+    local mY = input.GetMousePos()[2]
+    return (mX > pX and mX < pX2 and mY > pY and mY < pY2)
 end
 
-function UILib.UpdateMouse()
-    local mx, my = input.GetMousePos()
-    local isDown = input.IsButtonDown(107) -- 107 is MOUSE_LEFT in Source engine
-    
-    UILib.Mouse.Pressed = isDown and not UILib.Mouse.Down
-    UILib.Mouse.Released = not isDown and UILib.Mouse.Down
-    UILib.Mouse.Down = isDown
-    UILib.Mouse.X, UILib.Mouse.Y = mx, my
+local LastMouseState = false
+local function UpdateMouseState()
+    local mouseState = input.IsButtonDown(MOUSE_LEFT or 107)
+    MouseReleased = (mouseState == false and LastMouseState)
+    LastMouseState = mouseState
 end
 
-function UILib.CreateWindow(title, x, y, width, height)
-    local win = {
-        Title = title,
-        X = x, Y = y, W = width, H = height,
-        Elements = {}, Visible = true
+local function Clamp(n, low, high) return math.min(math.max(n, low), high) end
+
+local function SetColorStyle(color)
+    local alpha = color[4] or 255
+    draw.Color(color[1], color[2], color[3], alpha)
+end
+
+--[[ Component Class ]]
+local Component = { ID = 0, Visible = true, Flags = ItemFlags.None }
+Component.__index = Component
+function Component.New() return setmetatable({ Visible = true, Flags = ItemFlags.None }, Component) end
+function Component:SetVisible(state) self.Visible = state end
+
+--[[ Checkbox ]]
+local Checkbox = { Label = "Checkbox", Value = false }
+Checkbox.__index = Checkbox
+setmetatable(Checkbox, Component)
+function Checkbox.New(label, value, flags)
+    local self = setmetatable({}, Checkbox)
+    self.ID = wilgui.CurrentID; self.Label = label; self.Value = value or false; self.Flags = flags or ItemFlags.None
+    wilgui.CurrentID = wilgui.CurrentID + 1
+    return self
+end
+function Checkbox:GetValue() return self.Value end
+function Checkbox:Render(menu)
+    local lblWidth, lblHeight = draw.GetTextSize(self.Label)
+    local chkSize = math.floor(lblHeight * 1.4)
+    if MouseReleased and MouseInBounds(menu.X + menu.Cursor.X, menu.Y + menu.Cursor.Y, menu.X + menu.Cursor.X + chkSize + menu.Style.Space + lblWidth, menu.Y + menu.Cursor.Y + chkSize) then
+        self.Value = not self.Value
+    end
+    if self.Value then draw.Color(70, 190, 50, 255) else draw.Color(180, 60, 60, 250) end
+    draw.FilledRect(menu.X + menu.Cursor.X, menu.Y + menu.Cursor.Y, menu.X + menu.Cursor.X + chkSize, menu.Y + menu.Cursor.Y + chkSize)
+    draw.SetFont(wilgui.Font)
+    SetColorStyle(menu.Style.Text)
+    draw.Text(menu.X + menu.Cursor.X + chkSize + menu.Style.Space, math.floor(menu.Y + menu.Cursor.Y + (chkSize / 2) - (lblHeight / 2)), self.Label)
+    menu.Cursor.Y = menu.Cursor.Y + chkSize + menu.Style.Space
+end
+
+--[[ Slider ]]
+local Slider = { Label = "Slider", Min = 0, Max = 100, Value = 0 }
+Slider.__index = Slider
+setmetatable(Slider, Component)
+function Slider.New(label, min, max, value, flags)
+    local self = setmetatable({}, Slider)
+    self.ID = wilgui.CurrentID; self.Label = label; self.Min = min; self.Max = max; self.Value = value or min; self.Flags = flags or ItemFlags.None
+    wilgui.CurrentID = wilgui.CurrentID + 1
+    return self
+end
+function Slider:GetValue() return self.Value end
+function Slider:Render(menu)
+    local lblWidth, lblHeight = draw.GetTextSize(self.Label .. ": " .. self.Value)
+    local sliderWidth = menu.Width - (menu.Style.Space * 2)
+    local sliderHeight = lblHeight + (menu.Style.Space * 2)
+    local dragX = math.floor(((self.Value - self.Min) / math.abs(self.Max - self.Min)) * sliderWidth)
+
+    SetColorStyle(menu.Style.Item)
+    if DragID == 0 and MouseInBounds(menu.X + menu.Cursor.X - 4, menu.Y + menu.Cursor.Y, menu.X + menu.Cursor.X + sliderWidth + 8, menu.Y + menu.Cursor.Y + sliderHeight) then
+        SetColorStyle(menu.Style.ItemHover)
+        if input.IsButtonDown(MOUSE_LEFT or 107) then
+            dragX = Clamp(input.GetMousePos()[1] - (menu.X + menu.Cursor.X), 0, sliderWidth)
+            self.Value = (math.floor((dragX / sliderWidth) * math.abs(self.Max - self.Min))) + self.Min
+        end
+    end
+
+    draw.FilledRect(menu.X + menu.Cursor.X, menu.Y + menu.Cursor.Y, menu.X + menu.Cursor.X + sliderWidth, menu.Y + menu.Cursor.Y + sliderHeight)
+    SetColorStyle(menu.Style.Highlight)
+    draw.FilledRect(menu.X + menu.Cursor.X, menu.Y + menu.Cursor.Y, menu.X + menu.Cursor.X + dragX, menu.Y + menu.Cursor.Y + sliderHeight)
+    draw.SetFont(wilgui.Font)
+    SetColorStyle(menu.Style.Text)
+    draw.Text(math.floor(menu.X + menu.Cursor.X + (sliderWidth / 2) - (lblWidth / 2)), math.floor(menu.Y + menu.Cursor.Y + (sliderHeight / 2) - (lblHeight / 2)), self.Label .. ": " .. self.Value)
+    menu.Cursor.Y = menu.Cursor.Y + sliderHeight + menu.Style.Space
+end
+
+--[[ Menu Class ]]
+local Menu = {}
+local MetaMenu = { __index = Menu }
+function Menu.New(title, flags)
+    local self = setmetatable({}, MetaMenu)
+    self.ID = wilgui.CurrentID; self.Title = title; self.Components = {}; self.Visible = true
+    self.X = 100; self.Y = 100; self.Width = 220; self.Height = 200; self.Cursor = { X = 0, Y = 0 }
+    self.Style = {
+        Space = 4, Outline = true, WindowBg = { 30, 30, 30, 255 }, TitleBg = { 55, 100, 215, 255 },
+        Text = { 255, 255, 255, 255 }, Item = { 50, 50, 50, 255 }, ItemHover = { 65, 65, 65, 255 },
+        ItemActive = { 80, 80, 80, 255 }, Highlight = { 180, 180, 180, 100 }
     }
-
-    function win:AddCheckbox(label, id, defaultState)
-        table.insert(self.Elements, { Type = "Checkbox", Label = label, ID = id, Value = defaultState or false })
-    end
-
-    function win:AddSlider(label, id, min, max, defaultVal)
-        table.insert(self.Elements, { Type = "Slider", Label = label, ID = id, Min = min, Max = max, Value = defaultVal or min })
-    end
-
-    function win:GetValue(id)
-        for _, el in ipairs(self.Elements) do
-            if el.ID == id then return el.Value end
-        end
-        return nil
-    end
-
-    function win:SetValue(id, val)
-        for _, el in ipairs(self.Elements) do
-            if el.ID == id then el.Value = val end
-        end
-    end
-    
-    table.insert(UILib.Windows, win)
-    return win
+    self.Flags = flags or 0
+    wilgui.CurrentID = wilgui.CurrentID + 1
+    return self
 end
+function Menu:AddComponent(component) table.insert(self.Components, component); return component end
 
-function UILib.Render()
-    if not gui.IsMenuOpen() then return end
-    
-    UILib.UpdateMouse()
-    
-    for _, win in ipairs(UILib.Windows) do
-        if win.Visible then
-            local titleHeight = 20
-            
-            -- Handle Dragging
-            if UILib.Mouse.Pressed and UILib.Mouse.X >= win.X and UILib.Mouse.X <= win.X + win.W and UILib.Mouse.Y >= win.Y and UILib.Mouse.Y <= win.Y + titleHeight then
-                UILib.DragInfo.Dragging = true
-                UILib.DragInfo.Window = win
-                UILib.DragInfo.OffsetX = UILib.Mouse.X - win.X
-                UILib.DragInfo.OffsetY = UILib.Mouse.Y - win.Y
-            end
+--[[ wilgui Core ]]
+function wilgui.Clear() wilgui.Menus = {} end -- Clears menus to prevent overlaps on script reload
+function wilgui.Create(title, flags)
+    local menu = Menu.New(title, flags)
+    table.insert(wilgui.Menus, menu)
+    return menu
+end
+function wilgui.Checkbox(label, value, flags) return Checkbox.New(label, value, flags) end
+function wilgui.Slider(label, min, max, value, flags) return Slider.New(label, min, max, value, flags) end
 
-            if UILib.DragInfo.Dragging and UILib.DragInfo.Window == win then
-                if UILib.Mouse.Down then
-                    win.X = UILib.Mouse.X - UILib.DragInfo.OffsetX
-                    win.Y = UILib.Mouse.Y - UILib.DragInfo.OffsetY
-                else
-                    UILib.DragInfo.Dragging = false
-                    UILib.DragInfo.Window = nil
-                end
-            end
+function wilgui.Draw()
+    if gui.GetValue("clean screenshots") == 1 and engine.IsTakingScreenshot() then return end
+    UpdateMouseState()
 
-            -- Background & Title Bar
-            draw.Color(35, 35, 35, 255)
-            draw.FilledRect(win.X, win.Y, win.X + win.W, win.Y + win.H)
-            draw.Color(20, 20, 20, 255)
-            draw.FilledRect(win.X, win.Y, win.X + win.W, win.Y + titleHeight)
-            draw.Color(60, 60, 60, 255)
-            draw.OutlinedRect(win.X, win.Y, win.X + win.W, win.Y + win.H)
-            draw.OutlinedRect(win.X, win.Y, win.X + win.W, win.Y + titleHeight)
+    for _, vMenu in pairs(wilgui.Menus) do
+        if not vMenu.Visible then goto continue end
+        if gui.IsMenuOpen() == false and (vMenu.Flags & MenuFlags.ShowAlways == 0) then return end
 
-            -- Window Title
-            draw.SetFont(fontTitle)
-            draw.Color(255, 255, 255, 255)
-            draw.Text(win.X + 8, win.Y + 3, win.Title)
-
-            -- Render UI Elements
-            local offsetY = win.Y + titleHeight + 10
-            for _, el in ipairs(win.Elements) do
-                if el.Type == "Checkbox" then
-                    local boxSize = 12
-                    local hovered = UILib.Mouse.X >= win.X + 10 and UILib.Mouse.X <= win.X + win.W and UILib.Mouse.Y >= offsetY and UILib.Mouse.Y <= offsetY + boxSize
-                    
-                    if hovered and UILib.Mouse.Pressed then
-                        el.Value = not el.Value
-                    end
-
-                    draw.Color(hovered and 70 or 50, hovered and 70 or 50, hovered and 70 or 50, 255)
-                    draw.FilledRect(win.X + 10, offsetY, win.X + 10 + boxSize, offsetY + boxSize)
-                    draw.Color(100, 100, 100, 255)
-                    draw.OutlinedRect(win.X + 10, offsetY, win.X + 10 + boxSize, offsetY + boxSize)
-
-                    if el.Value then
-                        draw.Color(120, 255, 120, 255)
-                        draw.FilledRect(win.X + 12, offsetY + 2, win.X + 8 + boxSize, offsetY - 2 + boxSize)
-                    end
-
-                    draw.SetFont(font)
-                    draw.Color(255, 255, 255, 255)
-                    draw.Text(win.X + 30, offsetY - 1, el.Label)
-                    offsetY = offsetY + 22
-
-                elseif el.Type == "Slider" then
-                    local sliderW = win.W - 20
-                    local sliderH = 8
-                    local hovered = UILib.Mouse.X >= win.X + 10 and UILib.Mouse.X <= win.X + 10 + sliderW and UILib.Mouse.Y >= offsetY + 15 and UILib.Mouse.Y <= offsetY + 15 + sliderH
-                    
-                    if hovered and UILib.Mouse.Pressed then
-                        UILib.DragInfo.DraggingSlider = el
-                    end
-                    
-                    if UILib.DragInfo.DraggingSlider == el then
-                        if UILib.Mouse.Down then
-                            local pct = (UILib.Mouse.X - (win.X + 10)) / sliderW
-                            pct = math.max(0, math.min(1, pct))
-                            el.Value = math.floor((el.Min + pct * (el.Max - el.Min)) + 0.5)
-                        else
-                            UILib.DragInfo.DraggingSlider = nil
-                        end
-                    end
-
-                    draw.SetFont(font)
-                    draw.Color(255, 255, 255, 255)
-                    draw.Text(win.X + 10, offsetY, el.Label .. ": " .. tostring(el.Value))
-
-                    draw.Color(50, 50, 50, 255)
-                    draw.FilledRect(win.X + 10, offsetY + 15, win.X + 10 + sliderW, offsetY + 15 + sliderH)
-                    
-                    local fillW = ((el.Value - el.Min) / (el.Max - el.Min)) * sliderW
-                    draw.Color(100, 150, 255, 255)
-                    draw.FilledRect(win.X + 10, offsetY + 15, win.X + 10 + fillW, offsetY + 15 + sliderH)
-                    draw.Color(100, 100, 100, 255)
-                    draw.OutlinedRect(win.X + 10, offsetY + 15, win.X + 10 + sliderW, offsetY + 15 + sliderH)
-                    
-                    offsetY = offsetY + 35
+        local tbHeight = 20
+        if vMenu.Flags & MenuFlags.NoDrag == 0 then
+            local mX, mY = input.GetMousePos()[1], input.GetMousePos()[2]
+            if DragID == vMenu.ID then
+                if input.IsButtonDown(MOUSE_LEFT or 107) then
+                    vMenu.X, vMenu.Y = mX - DragOffset[1], mY - DragOffset[2]
+                else DragID = 0 end
+            elseif DragID == 0 then
+                if input.IsButtonDown(MOUSE_LEFT or 107) and MouseInBounds(vMenu.X, vMenu.Y, vMenu.X + vMenu.Width, vMenu.Y + tbHeight) then
+                    DragOffset = { mX - vMenu.X, mY - vMenu.Y }; DragID = vMenu.ID
                 end
             end
         end
+
+        SetColorStyle(vMenu.Style.WindowBg)
+        draw.FilledRect(vMenu.X, vMenu.Y, vMenu.X + vMenu.Width, vMenu.Y + vMenu.Height)
+        if vMenu.Style.Outline then
+            SetColorStyle(vMenu.Style.TitleBg)
+            draw.OutlinedRect(vMenu.X, vMenu.Y, vMenu.X + vMenu.Width, vMenu.Y + vMenu.Height)
+        end
+
+        SetColorStyle(vMenu.Style.TitleBg)
+        draw.FilledRect(vMenu.X, vMenu.Y, vMenu.X + vMenu.Width, vMenu.Y + tbHeight)
+        draw.SetFont(wilgui.Font)
+        SetColorStyle(vMenu.Style.Text)
+        local titleWidth, titleHeight = draw.GetTextSize(vMenu.Title)
+        draw.Text(math.floor(vMenu.X + (vMenu.Width / 2) - (titleWidth / 2)), vMenu.Y + math.floor((tbHeight / 2) - (titleHeight / 2)), vMenu.Title)
+        vMenu.Cursor.Y = tbHeight
+
+        vMenu.Cursor.Y = vMenu.Cursor.Y + vMenu.Style.Space
+        vMenu.Cursor.X = vMenu.Style.Space
+        for _, vComp in pairs(vMenu.Components) do
+            if vComp.Visible then vComp:Render(vMenu) end
+        end
+
+        if vMenu.Flags & MenuFlags.AutoSize ~= 0 then vMenu.Height = vMenu.Cursor.Y end
+        ::continue::
     end
 end
 
-return UILib
+callbacks.Register("Draw", "Draw_WilGUI", wilgui.Draw)
+return wilgui

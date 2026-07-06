@@ -2,10 +2,10 @@
     wilcrit - Shows you detailed info of your CritHack
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilcrit
     Author - Wilber (https://github.com/GNWilber)
-    Version - 1.02
+    Version - 1.03
 --]]
 
-local Version = 1.02
+local Version = 1.03
 local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilcrit/wilcrit.lua"
 
 -- =======================
@@ -19,10 +19,8 @@ local function AutoUpdate()
     if not remoteVerStr then return end
 
     local remoteVer = tonumber(remoteVerStr)
-    -- Only update if github version is strictly greater
     if remoteVer and remoteVer > Version then
         print("[wilcrit] Found newer version (" .. remoteVer .. "). Updating...")
-        
         local f = io.open("wilcrit.lua", "w")
         if f then
             f:write(content)
@@ -38,61 +36,48 @@ AutoUpdate()
 -- =======================
 local success, wilgui = pcall(require, "wilgui")
 if not success then
-    print("[wilcrit] wilgui.lua missing! Cannot draw the config menu. Ensure it's in the same folder.")
+    print("[wilcrit WARNING] wilgui.lua missing! Cannot draw the config menu. Ensure it's in the same folder.")
 end
 
-local ConfigFile = "./wilconfigs/wilcrit.cfg"
+local ConfigFile = "wilconfigs/wilcrit.cfg"
 local function LoadConfig()
     local f = io.open(ConfigFile, "r")
     if f then
+        local en = f:read("*l")
         local x = tonumber(f:read("*l"))
         local y = tonumber(f:read("*l"))
-        local en = f:read("*l")
         f:close()
-        return x, y, (en == "true")
+        return (en == "true"), x, y
     end
-    return nil, nil, nil
+    return true, 10, 350 -- Default backward compatibility
 end
 
-local function SaveConfig(x, y, en)
+local function SaveConfig(en, x, y)
     local f = io.open(ConfigFile, "w")
     if f then
+        f:write(tostring(en) .. "\n")
         f:write(tostring(x) .. "\n")
         f:write(tostring(y) .. "\n")
-        f:write(tostring(en) .. "\n")
         f:close()
-    else
-        print("[wilcrit WARNING] Could not save config! Make sure you created a folder named 'wilconfigs' in your lmaobox folder.")
     end
 end
 
--- Backward Compatibility Default Layout
-local defaultX, defaultY = 10, 350
-local savedX, savedY, savedEn = LoadConfig()
+local savedEn, savedX, savedY = LoadConfig()
 
-local menuWin = nil
+local chkEnable, sldX, sldY = nil, nil, nil
 if success and wilgui then
-    wilgui.Clear() -- Fixes the "black box" / duplicate menu overlap bug on script reload!
-    menuWin = wilgui.CreateWindow("wilcrit Settings", 100, 100, 260, 150)
-    menuWin:AddCheckbox("Enable wilcrit Info", "enabled", savedEn ~= nil and savedEn or true)
-    menuWin:AddSlider("Panel X Offset", "panel_x", 0, 2560, savedX or defaultX)
-    menuWin:AddSlider("Panel Y Offset", "panel_y", 0, 1440, savedY or defaultY)
+    wilgui.Clear() -- Clears existing menus on script reload to prevent duplication!
+    
+    local menu = wilgui.Create("wilcrit Settings", MenuFlags.AutoSize)
+    menu.X = 100
+    menu.Y = 100
+    
+    chkEnable = menu:AddComponent(wilgui.Checkbox("Enable wilcrit Info", savedEn))
+    sldX = menu:AddComponent(wilgui.Slider("Panel X Offset", 0, 2560, savedX))
+    sldY = menu:AddComponent(wilgui.Slider("Panel Y Offset", 0, 1440, savedY))
 end
 
-local lastX, lastY, lastEn = savedX, savedY, savedEn
-local function GetCurrentConfig()
-    if not menuWin then return (savedX or defaultX), (savedY or defaultY), (savedEn ~= nil and savedEn or true) end
-    
-    local curX = menuWin:GetValue("panel_x")
-    local curY = menuWin:GetValue("panel_y")
-    local curEn = menuWin:GetValue("enabled")
-    
-    if curX ~= lastX or curY ~= lastY or curEn ~= lastEn then
-        SaveConfig(curX, curY, curEn)
-        lastX, lastY, lastEn = curX, curY, curEn
-    end
-    return curX, curY, curEn
-end
+local lastEn, lastX, lastY = savedEn, savedX, savedY
 
 -- =======================
 -- HUD Draw Logic
@@ -100,13 +85,20 @@ end
 local indicator = draw.CreateFont('Verdana', 16, 700, FONTFLAG_CUSTOM | FONTFLAG_OUTLINE)
 
 callbacks.Register("Draw", "wilcrit_Draw", function()
-    -- Render the GUI Elements First (Must be handled within Draw callback here to prevent ghost menus)
-    if success and wilgui then
-        wilgui.Render()
+    -- Dynamically fetch configs and autosave if changed
+    local curEn, curX, curY = lastEn, lastX, lastY
+    if chkEnable and sldX and sldY then
+        curEn = chkEnable:GetValue()
+        curX = sldX:GetValue()
+        curY = sldY:GetValue()
+        
+        if curEn ~= lastEn or curX ~= lastX or curY ~= lastY then
+            SaveConfig(curEn, curX, curY)
+            lastEn, lastX, lastY = curEn, curX, curY
+        end
     end
 
-    local panelX, panelY, enabled = GetCurrentConfig()
-    if not enabled then return end
+    if not curEn then return end
 
     local me = entities.GetLocalPlayer()
     if not me or not me:IsAlive() then return end
@@ -153,7 +145,7 @@ callbacks.Register("Draw", "wilcrit_Draw", function()
         table.insert(data, "Damage needed for crit: " .. requiredDamage)
     end
 
-    local offsetY = panelY
+    local offsetY = curY
 
     draw.SetFont(indicator)
     for _, line in ipairs(data) do
@@ -164,7 +156,7 @@ callbacks.Register("Draw", "wilcrit_Draw", function()
         end
 
         local txtWidth, txtHeight = draw.GetTextSize(line)
-        draw.Text(panelX, offsetY, line)
+        draw.Text(curX, offsetY, line)
         offsetY = offsetY + txtHeight + 5
     end
 end)
