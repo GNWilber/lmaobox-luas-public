@@ -2,10 +2,10 @@
     wilgui - Generic Framework for Lmaobox
     GitHub - https://github.com/GNWilber/lmaobox-luas-public/main/wilgui
     Author - Wilber (Forked from LNX)
-    Version - 1.05
+    Version - 1.06
 ]]
 
-local Version = 1.05
+local Version = 1.06
 local RepoURL = "https://raw.githubusercontent.com/GNWilber/lmaobox-luas-public/main/wilgui/wilgui.lua"
 
 -- =======================
@@ -358,6 +358,7 @@ function Menu.New(title, flags)
     }
     self.Flags = flags or 0; wilgui.CurrentID = wilgui.CurrentID + 1; return self
 end
+function Menu:SetVisible(state) self.Visible = state end
 function Menu:IsPopup() return self.Flags & wilgui.MenuFlags.Popup ~= 0 end
 function Menu:SetPosition(x, y) self.X = x; self.Y = y end
 function Menu:AddComponent(component) table.insert(self.Components, component); return component end
